@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://quikshare.pritam.pp.ua"><strong>quikshare.pritam.pp.ua</strong></a>
+  <a href="https://quikshare.qd.je"><strong>quikshare.pritam.pp.ua</strong></a>
 </p>
 
 Move a file from one device to another with a link and a QR code. No account,
@@ -220,9 +220,6 @@ two SVGs.
 
 The banner at the top of this file is still the older raster artwork
 (`logo.png`); it is not used anywhere in the app.
-
-[`AGENTS.md`](AGENTS.md) (the Vercel Web Interface Guidelines) is binding on
-all UI work in this repo.
 
 ## Limits
 
