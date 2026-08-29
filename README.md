@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://quikshare.qd.je"><strong>quikshare.pritam.pp.ua</strong></a>
+  <a href="https://quikshare.qd.je"><strong>quikshare.qd.je</strong></a>
 </p>
 
 Move a file from one device to another with a link and a QR code. No account,
