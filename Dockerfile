@@ -7,7 +7,13 @@ WORKDIR /app
 ARG VITE_STUN_URLS=""
 ENV VITE_STUN_URLS=$VITE_STUN_URLS
 COPY package*.json ./
-RUN npm ci
+# --include=dev, not a bare `npm ci`: npm reads NODE_ENV=production from the
+# environment as an implicit --omit=dev, and a platform that injects the
+# service env vars into the build stage (Zeabur does; Render does not) strands
+# this stage without vite or tsc — `npm run build` then dies with
+# `sh: vite: not found`, exit 127. --include=dev beats --omit whichever order
+# they arrive in, so this holds even if the platform also passes --omit=dev.
+RUN npm ci --include=dev
 COPY . .
 RUN npm run build
 
