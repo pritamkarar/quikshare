@@ -1,0 +1,184 @@
+/*
+ * Design tokens: a soft-UI (neomorphic) system. Surfaces are the SAME color
+ * as the page background — depth comes entirely from a pair of opposed
+ * shadows, a light one from the top-left and a dark one from the
+ * bottom-right, as if the whole UI were extruded from one sheet of material.
+ *
+ * That constraint is why --color-surface equals --color-bg in both themes.
+ * A card that painted itself a different color would read as a sticker laid
+ * ON the sheet rather than as part of it, and the effect collapses.
+ * --color-surface-2 is the one deliberate exception: it is a RECESSED tone,
+ * used for wells (inputs, progress tracks, video letterboxing) that read as
+ * pressed INTO the sheet rather than raised out of it.
+ *
+ * The sheet is WARM, and that is the load-bearing decision in this file.
+ * It used to be #e8ebf0 — a cold blue-grey a hair away from the #e0e5ec that
+ * every soft-UI demo on the internet is built from, sitting under a cool blue
+ * accent. Accent and ground shared a hue family, so the accent had nothing to
+ * push against and the extrusion read as noise rather than as depth. The
+ * ground is now a warm porcelain and the accent stayed cobalt, so the one
+ * saturated thing on the page is also the only cool thing on it.
+ *
+ * The accent is cobalt rather than a matter of taste. --color-success,
+ * --color-warning and --color-danger are already spent on real product states
+ * (direct / relayed / failed), and a teal or green accent would be
+ * indistinguishable from a "direct" badge at chip size. Blue is the only slot
+ * the semantic palette leaves open.
+ *
+ * Theme handling has three states, not two:
+ *   - No `data-theme` attribute: "system" — the default. Only
+ *     `prefers-color-scheme` distinguishes light from dark.
+ *   - `data-theme="light"`: explicit light, wins over system dark.
+ *   - `data-theme="dark"`: explicit dark, wins over system light.
+ *
+ * So every token is defined in full on bare `:root` (light, the baseline),
+ * redefined under the system-dark media query guarded against an explicit
+ * light choice, and redefined again under the explicit dark attribute so a
+ * toggle wins in both directions. No color is ever defined only inside a
+ * media query. client/ui/ThemeToggle.tsx is what sets the attribute.
+ *
+ * Contrast: body text targets APCA Lc >= 90 against --color-bg; muted and
+ * large/status text targets Lc >= 60. Soft-UI is notorious for failing this
+ * — the usual mistake is tinting TEXT to match the pastel surface. Text and
+ * status tokens here stay at full strength; only the surfaces are soft.
+ *
+ * The dark base is a lifted warm graphite (#201f1d), not the near-black it
+ * once was. Near-black leaves no headroom for the top-left highlight — the
+ * lighter half of every shadow pair would be clipped and the extrusion would
+ * read as a plain drop shadow.
+ */
+
+:root {
+  color-scheme: light;
+
+  --color-bg: #ebe9e4;
+  /* Equal to --color-bg by design; see the file header. */
+  --color-surface: #ebe9e4;
+  /* Recessed, for wells. Reads as pressed in, not raised out. */
+  --color-surface-2: #e0ddd5;
+  /* A rim light rather than a drawn line: on a raised surface this is the
+     lit edge, so it points the same direction as the light shadow below. */
+  --color-border: rgb(255 255 255 / 76%);
+  /* For drawn artwork (client/ui/HeroArt.tsx) and dashed affordances, where
+     a rim light is invisible and a real line is needed. */
+  --color-border-strong: rgb(60 54 44 / 30%);
+  --color-text: #1c1a17;
+  --color-text-muted: #6b665c;
+  --color-accent: #2b50e2;
+  --color-accent-fg: #ffffff;
+  --color-success: #0c7346;
+  --color-warning: #8a5a00;
+  --color-danger: #bd2a1d;
+
+  /* The two halves of every extrusion. Named separately so a component can
+     build a custom pair (a different offset, a single side) without
+     re-deriving the colors. Both are tinted toward the background's own hue
+     — AGENTS.md's hue-consistency rule — which is why the dark half is a warm
+     stone rather than the blue-grey it was under the old cold ground. */
+  --neo-light: #ffffff;
+  --neo-dark: #c5c0b5;
+
+  /* Raised: the default card/button state. Lower offset and a wider blur than
+     the original 5/5/12 pair. The tight version drew two visibly separate
+     hard shadows, which is what dates soft-UI; spreading them lets the two
+     halves meet in the middle and read as one curved edge. */
+  --shadow-raised:
+    6px 6px 16px var(--neo-dark),
+    -6px -6px 14px var(--neo-light);
+  /* Raised further — hover, and the one card that should sit above the rest.
+     Offsets stay proportional to the pair above: one light source, one
+     direction, at every elevation. */
+  --shadow-raised-lg:
+    14px 14px 32px var(--neo-dark),
+    -11px -11px 26px var(--neo-light);
+  /* Pressed: wells, active buttons, focused inputs. */
+  --shadow-inset:
+    inset 5px 5px 12px var(--neo-dark),
+    inset -5px -5px 12px var(--neo-light);
+  --shadow-inset-sm:
+    inset 2px 2px 5px var(--neo-dark),
+    inset -2px -2px 5px var(--neo-light);
+
+  /* Kept as aliases: components written before the soft-UI pass reference
+     these two by name, and a card asking for "ambient" should now get the
+     extrusion rather than the flat drop shadow it used to. */
+  --shadow-ambient: var(--shadow-raised);
+  --shadow-direct: var(--shadow-raised-lg);
+
+  /* Accent halo, for the single live/active element on screen. */
+  --glow-accent: 0 0 0 1px color-mix(in oklab, var(--color-accent) 45%, transparent),
+    0 8px 30px -6px color-mix(in oklab, var(--color-accent) 45%, transparent);
+
+  /* Soft-UI needs generous corners — a tight radius reads as a bevel, not a
+     pillow. Concentric: each step is roughly the previous plus its padding.
+     ONE scale, used everywhere; see AGENTS.md on nested radii. */
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 26px;
+  --radius-xl: 36px;
+
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  /* Entrances only. Long enough to read as deliberate, short enough that
+     someone who came to move one file is never waiting on it. */
+  --duration-slow: 420ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Slight overshoot, for the single connect moment. Kept away from
+     --ease-out so nothing borrows a bounce by accident. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* System dark, unless the viewer explicitly chose light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --color-bg: #201f1d;
+    --color-surface: #201f1d;
+    --color-surface-2: #191817;
+    --color-border: rgb(255 255 255 / 8%);
+    --color-border-strong: rgb(255 255 255 / 26%);
+    --color-text: #f2efe9;
+    --color-text-muted: #a9a399;
+    --color-accent: #98aeff;
+    --color-accent-fg: #0d1020;
+    --color-success: #4fd894;
+    --color-warning: #ecbb5e;
+    --color-danger: #ff9d95;
+
+    --neo-light: #2c2b27;
+    --neo-dark: #121110;
+  }
+}
+
+/* Explicit dark choice wins in both directions. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-bg: #201f1d;
+  --color-surface: #201f1d;
+  --color-surface-2: #191817;
+  --color-border: rgb(255 255 255 / 8%);
+  --color-border-strong: rgb(255 255 255 / 26%);
+  --color-text: #f2efe9;
+  --color-text-muted: #a9a399;
+  --color-accent: #98aeff;
+  --color-accent-fg: #0d1020;
+  --color-success: #4fd894;
+  --color-warning: #ecbb5e;
+  --color-danger: #ff9d95;
+
+  --neo-light: #2c2b27;
+  --neo-dark: #121110;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

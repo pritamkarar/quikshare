@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+tests
+docs
+.claude
+.superpowers
+test-results
+playwright-report
+# Secrets. Neither belongs in the build context: the build stage is COPY . .,
+# so anything reachable here lands in that stage's layer and stays visible
+# through `--target build`, a cache export, or `docker history` on it — even
+# though the runtime stage copies only dist. `.env` holds TURN_SECRET for the
+# relay; coturn/turnserver.conf holds the same secret for coturn.
+.env*
+coturn/

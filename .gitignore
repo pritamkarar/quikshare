@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.env
+.env.*
+# coturn's static-auth-secret is written into this file rather than passed on
+# coturn's command line (see docker-compose.yml). It holds a secret, so it is
+# created by the operator and never committed.
+coturn/turnserver.conf
+*.log
+.DS_Store
+.remember/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.superpowers/
+.claude/
+.worktrees/

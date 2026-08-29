@@ -1,0 +1,73 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# One web service, one instance, on the free plan. The instance count is not a
+# tuning knob here: rooms live in this process's memory (server/rooms.ts), so
+# two peers that land on different instances can never find each other. The
+# free plan cannot autoscale, which for this app is a feature.
+services:
+  - type: web
+    name: quik-share
+    runtime: docker
+    plan: free
+    # Closest free region to South Asia. Latency only affects pairing and the
+    # relayed fallback — an upgraded WebRTC session goes device-to-device and
+    # never touches this box.
+    region: singapore
+    dockerfilePath: ./Dockerfile
+
+    # Serves client/index.html in production (server/index.ts). Also what wakes
+    # a spun-down free instance, which is why it must not be behind any check
+    # that needs a paired session.
+    healthCheckPath: /
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Render terminates TLS at its own load balancer and reaches this
+      # container over a private address, so the connecting socket is never
+      # loopback — TRUST_PROXY=true would vouch for a hop that does not exist
+      # here and silently drop every client into one rate-limit bucket.
+      # 'uniquelocal' is proxy-addr's name for the RFC1918 + fc00::/7 ranges,
+      # i.e. exactly the hop Render connects from and nothing else.
+      #
+      # Verify once after the first deploy: the startup log line names the
+      # value it resolved. See docs/deployment.md for what to do if every
+      # client still shares a bucket.
+      - key: TRUST_PROXY
+        value: uniquelocal
+
+      # Live media's ICE fallback. Both are `sync: false`: Render prompts for
+      # them on first apply and stores them on the service, so the secret is
+      # never in this file and a fork of this repo does not inherit it.
+      #
+      # They point at a coturn running SOMEWHERE ELSE, and they have to. A
+      # Render web service is one HTTP port behind Render's load balancer;
+      # TURN needs UDP 3478 plus a whole relay port range reachable directly
+      # from the browser, which this platform does not offer at any plan. The
+      # relay never dials coturn either way — it only mints credentials
+      # against the shared secret (server/turn.ts) — so the two can live on
+      # different machines with nothing between them but this secret, which
+      # must be byte-identical to coturn's own `static-auth-secret`.
+      #
+      # Leaving BOTH unset is a supported deployment: /turn answers with an
+      # empty list, live media still connects on a LAN and between peers whose
+      # NATs cooperate, and file transfer is unaffected because it falls back
+      # to the WebSocket relay. Setting only one is a startup error on
+      # purpose. docs/deployment.md has the runbook for the coturn side.
+      # TURN_SECRET is coturn's signing secret; TURN_USERNAME + TURN_CREDENTIAL
+      # is the long-lived pair a managed provider's dashboard hands you
+      # instead. Set the ONE your TURN server accepts — both together is a
+      # startup error, because they describe two different servers and
+      # picking one for you would leave half of this silently inert.
+      - key: TURN_URLS
+        sync: false
+      - key: TURN_SECRET
+        sync: false
+      - key: TURN_USERNAME
+        sync: false
+      - key: TURN_CREDENTIAL
+        sync: false
+
+    # PORT is injected by Render and read by resolvePort() in server/index.ts,
+    # so it is deliberately absent here — pinning it would fight the platform.

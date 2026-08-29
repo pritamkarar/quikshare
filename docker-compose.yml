@@ -1,0 +1,265 @@
+# Two services: the relay this repo builds, and a TURN server for live media.
+#
+# TURN exists only for the live camera/screen path. File transfer never uses
+# it — that has the WebSocket relay as its always-works baseline, and putting
+# multi-gigabyte transfers on a TURN server would be a bandwidth bill for no
+# benefit (see the design spec, D2). Media has no such fallback, which is the
+# whole reason this file exists.
+#
+# This file puts both on ONE host, which is the shape for a laptop or a single
+# VM. A relay on a platform that only exposes HTTP — Render, and most PaaS —
+# cannot host coturn at all, so there the two split across machines and the
+# only thing joining them is the shared secret. docs/deployment.md has that
+# runbook; the coturn service below is still the one to run, on its own box.
+#
+# Everything below is configured but has never been run: no part of this file
+# has been exercised against a Docker daemon, so the deny rules in particular
+# have not been evaluated by the program that will enforce them. They are
+# derived from coturn's documentation and from its source at the pinned tag,
+# which is sound for what it claims and is not the same as a live test. One
+# `docker compose up` and one CreatePermission against a denied address is
+# what would turn this from reasoned into demonstrated.
+services:
+  relay:
+    build:
+      context: .
+      # Baked into the client bundle at build time — it cannot be set at run
+      # time, unlike everything under `environment` below.
+      args:
+        VITE_STUN_URLS: ${VITE_STUN_URLS:-}
+    ports:
+      - "8787:8787"
+    environment:
+      NODE_ENV: production
+
+      # TRUST_PROXY is deliberately ABSENT from this list rather than set to a
+      # value. The relay sits behind whatever TLS terminator you put in front
+      # of it, and there is no proxy in this file — trusting one that is not
+      # there would let anything else on that host set X-Forwarded-For and
+      # mint unlimited rate-limit identities. Add it when you add the proxy;
+      # docs/deployment.md has the two cases and which one a container is.
+
+      # Dialled by the BROWSER, never by this container. The relay only mints
+      # credentials; it never connects to coturn. So `localhost` is correct
+      # for a dev machine running both, and pointing it at a compose service
+      # name — the obvious "fix" if you reason about container-to-container
+      # reachability — would break every real client, because the name is
+      # resolved by the browser and not by Docker.
+      #
+      # Required (`:?`), not defaulted, and the tension with the paragraph
+      # above is the point: a default of `turn:localhost:3478` is right on
+      # exactly one machine and quietly wrong everywhere else. The relay would
+      # start, log `TURN: 1 server(s)`, answer /turn with a well-formed
+      # credential, and hand every browser an ICE server pointing at *that
+      # browser's own* loopback. server/turn.ts throws in four places to stop
+      # precisely that healthy-looking-but-broken state; a default here would
+      # reintroduce it one layer up, where the code cannot see it. Set it in
+      # .env — `turn:localhost:3478` for a laptop, a publicly reachable
+      # host:port for anything else.
+      TURN_URLS: ${TURN_URLS:?TURN_URLS must be set — the address the BROWSER dials, e.g. turn:turn.example.com:3478 (turn:localhost:3478 for a dev machine); see docs/deployment.md}
+      TURN_SECRET: ${TURN_SECRET:?TURN_SECRET must be set — see docs/deployment.md}
+
+    # No `depends_on: coturn`. The relay only mints credentials — it never
+    # opens a connection to coturn, at startup or ever — so there is no
+    # ordering requirement to express, and declaring one would state a
+    # dependency that does not exist. `docker compose up` starts both services
+    # either way; depends_on would only change the order they start in, which
+    # nothing here is sensitive to.
+
+  coturn:
+    image: coturn/coturn:latest
+    # Host networking, not published ports. TURN allocates a fresh relay port
+    # per session out of the range below, and Docker's userland proxy does not
+    # forward UDP well enough for that to work reliably through a bridge. If
+    # host networking is unavailable (Docker Desktop on macOS/Windows), publish
+    # 3478 AND the whole 49160-49200 range explicitly and expect to debug it.
+    network_mode: host
+    volumes:
+      # The shared secret lives in this file and NOT on coturn's command line.
+      # That distinction is the whole reason the file exists, so it is worth
+      # spelling out: a process's argv is world-readable through
+      # /proc/<pid>/cmdline (absent a `hidepid` mount option) and is echoed
+      # back verbatim by `docker inspect`, so `--static-auth-secret=<value>`
+      # would hand the permanent key that every minted credential derives from
+      # to any local user on the host. A process's *environment* is not that:
+      # /proc/<pid>/environ is readable only by the owning uid, which is why
+      # the relay above can take the same secret through `environment:`.
+      #
+      # coturn has no --static-auth-secret-file and does not expand environment
+      # variables inside its configuration, so its only non-argv input for this
+      # value is a configuration file it parses. A Docker Compose `secret`
+      # would land the value in a file too, but coturn could still only consume
+      # it by parsing that file as configuration — the same mechanism with an
+      # extra indirection and a second copy of the value on disk.
+      #
+      # You create this file; it is not in the repo, because it holds a secret
+      # (.gitignore excludes it). One line is enough:
+      #
+      #     mkdir -p coturn
+      #     ( umask 077; printf 'static-auth-secret=%s\n' "$TURN_SECRET" > coturn/turnserver.conf )
+      #
+      # The umask, rather than a chmod afterwards: `>` creates the file at the
+      # default mask first, so a later chmod leaves a window in which the
+      # secret is world-readable.
+      #
+      # If the file does not exist when you `up`, Docker creates a *directory*
+      # at that path and coturn fails reading its configuration — that, not a
+      # permissions error, is the failure to expect from a missing file.
+      # docs/deployment.md covers this and the ownership question it raises.
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command:
+      # Reads the secret written above. Passing -c explicitly also pins which
+      # configuration file coturn reads instead of leaving it to the image's
+      # default search path — this `command:` replaces the image's own CMD, so
+      # without -c whatever configuration the image ships is what coturn ends
+      # up merging these flags with.
+      - -c
+      - /etc/coturn/turnserver.conf
+      - --listening-port=3478
+      # THE RELAY PORT RANGE. This is the operational sharp edge of the whole
+      # setup: it is what gets forgotten in a firewall, and the symptom is
+      # media that negotiates successfully and then never arrives — which
+      # looks like an app bug, not a network one. Whatever you set here must
+      # be open as UDP end to end.
+      - --min-port=49160
+      - --max-port=49200
+      # The REST convention the relay's GET /turn mints against. coturn stores
+      # no credentials: it recomputes base64(HMAC-SHA1(secret, username)) and
+      # compares, so the `static-auth-secret` in turnserver.conf must be
+      # byte-identical to the relay's TURN_SECRET.
+      - --use-auth-secret
+      - --realm=${TURN_REALM:-quikshare.local}
+      # Hardening, and none of it is optional. Anyone who can reach GET /turn
+      # can mint a working credential — that endpoint is unauthenticated by
+      # necessity — so without these a stranger can use this server as a hop
+      # into the operator's own private network.
+      - --no-multicast-peers
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      # RFC 6598 shared address space, and the one that gets left out. It is
+      # not a documentation range: it is CGNAT space, it is what several
+      # managed cloud networks use for internal addressing, and it is the
+      # entire Tailscale range — so on a host that has joined a tailnet,
+      # omitting this line exposes the whole tailnet through the relay to
+      # anyone holding a minted credential. Exactly the hop these rules exist
+      # to close, on exactly the class of host this file targets.
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      # Deliberately absent: 224.0.0.0/4, 240.0.0.0/4 and the 255.255.255.255
+      # broadcast address need no rule, because coturn's
+      # ioa_addr_is_multicast() treats any IPv4 first octet above 223 as
+      # multicast — so --no-multicast-peers above already covers the whole of
+      # 224.0.0.0-255.255.255.255. The other entries on the usual hardening
+      # lists (192.0.0.0/24, 192.0.2.0/24, 198.18.0.0/15, 198.51.100.0/24,
+      # 203.0.113.0/24) are documentation and benchmarking ranges with no
+      # reachability story on a real host.
+      #
+      # IPv6 counterparts of the private, loopback and link-local rules above —
+      # not of every rule. 0.0.0.0/8 has no counterpart here because coturn
+      # rejects the unspecified address natively (ioa_addr_is_zero()) rather
+      # than by range. `network_mode: host` hands coturn the host's real
+      # interfaces, and with no --listening-ip set coturn binds every IPv4 AND
+      # IPv6 address on the box (its own default, not something this file opts
+      # into) — so on any dual-stack host (the common case on a cloud VM) the
+      # IPv4-only denies above leave every IPv6 private range wide open to the
+      # same credential. Each --denied-peer-ip rule matches only its own
+      # address family; there is no "deny this /8 for both stacks" shorthand.
+      #
+      # There is no IPv6 counterpart to 100.64.0.0/10 to add: RFC 6598 is an
+      # IPv4-only allocation, and the IPv6 addressing of the tooling that uses
+      # it (Tailscale's fd7a:115c:a1e0::/48, for one) falls inside fc00::/7,
+      # which the rule below already covers.
+      - --denied-peer-ip=::1
+      - --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      - --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      # Deprecated site-local (RFC 3879). Rarely assigned now, and nothing
+      # canonicalizes it away, so a host that still carries one is reachable
+      # through the relay without this line.
+      - --denied-peer-ip=fec0::-feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      # The four IPv4-in-IPv6 encodings, denied as belt-and-suspenders rather
+      # than as live holes. `::ffff:10.0.0.1` is the same wire address as
+      # `10.0.0.1` under a different address FAMILY, and re-encoding a target
+      # that way used to sail past IPv4-only denies outright (coturn advisory
+      # GHSA-j8mm-mpf8-gvjg / CVE-2026-27624). Verified against the exact image
+      # this file pins — `coturn/coturn:latest` resolves to the same digest as
+      # the `4.17.2` tag as of this writing — that its ioa_addr_in_range()
+      # (src/client/ns_turn_ioaddr.c) canonicalizes the embedded IPv4 out of
+      # all four before matching the IPv4 rules above, so all four lines are
+      # redundant against that specific image today.
+      #
+      # They stay because `:latest` floats: today's finding is not a guarantee
+      # about whatever `latest` resolves to later, and these are the lines
+      # standing between the IPv4 deny list and a stranger walking through it
+      # by re-encoding the address, if it ever regresses or an operator points
+      # the image at an older tag. All four encodings are named by the same
+      # if/else-if chain in the same helper (ioa_addr_get_embedded_ipv4()), so
+      # insuring some of them and not the others would not follow from the
+      # argument for insuring any of them — which is why IPv4-compatible
+      # (`::/96`) is on this list too, having been the one the earlier
+      # three-line version left out.
+      #
+      # 6to4, NAT64 and IPv4-compatible are denied as whole prefixes, not only
+      # their private-IPv4 slices, so a public peer addressed through any of
+      # them is refused too. That is acceptable collateral: 6to4 is deprecated
+      # (RFC 7526), IPv4-compatible is deprecated (RFC 4291 §2.5.5.1), NAT64 is
+      # a translation prefix, and a dual-stack host reaches public IPv4 peers
+      # natively without going through any of them. Note `::/96` spans `::` and
+      # `::1`, which are already refused above and natively — denying them
+      # twice costs nothing and keeps the range expressible as one rule.
+      - --denied-peer-ip=::ffff:0.0.0.0-::ffff:255.255.255.255
+      - --denied-peer-ip=2002::-2002:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      - --denied-peer-ip=64:ff9b::-64:ff9b::ffff:ffff
+      - --denied-peer-ip=::0.0.0.0-::255.255.255.255
+      # Volume bounds. Everything above answers "where may a credential relay
+      # to"; these answer "how much", which nothing else in this deployment
+      # does. Without them a single credential, minted once and entirely
+      # within the endpoint's rate limit, can relay unlimited traffic to
+      # arbitrary PUBLIC peers for its whole lifetime — free bandwidth and
+      # free source-IP laundering on the operator's bill. The deny list does
+      # nothing about that; it is about the operator's private network.
+      #
+      # --max-bps is per session and, despite the name, is in BYTES per second:
+      # 1000000 is ~8 Mbit/s, generous headroom over a 1080p screen share
+      # (typically 2-5 Mbit/s) and far below what a saturating abuser wants.
+      # --total-quota and --user-quota count concurrent ALLOCATIONS, not bytes.
+      #
+      # --user-quota is set LOOSE, deliberately, and the reason is worth
+      # spelling out because a tight number looks more careful and is worse.
+      # The REST convention makes the username `<expiry-timestamp>:quikshare`,
+      # so the "user" is the expiry SECOND: every client that mints within the
+      # same second shares one quota, and every client that waits a second
+      # gets a fresh one. That cuts both ways, and neither way favours a small
+      # number. Against an attacker it buys almost nothing — minting again a
+      # second later resets the budget, so the real bounds on them are the
+      # endpoint's per-IP rate limit and --total-quota below. Against honest
+      # traffic it bites immediately: Chrome opens one relay allocation per
+      # local interface, so a multi-homed laptop (Wi-Fi + Ethernet + VPN)
+      # spends three or four on its own, and a handful of clients starting in
+      # the same second would collide on a shared budget and get
+      # `486 Allocation Quota Reached` — a failure with no plausible-looking
+      # cause, on legitimate users, produced by a control that does not
+      # inconvenience the abuser it was aimed at. 30 tolerates a same-second
+      # cohort of roughly seven multi-homed browsers while still stopping one
+      # credential from taking more than a third of the server. The bound that
+      # actually does the work here is --total-quota.
+      #
+      # --total-quota is a server-wide ceiling and therefore a trade rather
+      # than a free win: it turns "unbounded relay" into "bounded relay" at the
+      # cost that filling those 100 allocations denies service to everyone
+      # else. That is the better of the two failures, and the number is a
+      # capacity decision for the operator — but a decision, not a default to
+      # leave unexamined.
+      - --max-bps=1000000
+      - --total-quota=100
+      - --user-quota=30
+      # No local control interface, and no obsolete TLS. Note that no --cert or
+      # --pkey is set, so this service has no TLS material and does not serve
+      # `turns:` at all; these two flags bound what TLS would be if you added
+      # them. Do not advertise a `turns:` URL in TURN_URLS pointing at this
+      # service — see docs/deployment.md.
+      - --no-cli
+      - --no-tlsv1
+      - --no-tlsv1_1

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Zoom is never disabled: no user-scalable=no, no maximum-scale. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Matches the browser chrome (status bar / URL bar) to the page
+         background so a dark page doesn't sit in a light frame. Values must
+         track --color-bg in client/styles/tokens.css.
+         Split by media query rather than a single tag so the "system" theme
+         (no explicit choice) is correct with no JavaScript at all. An
+         explicit choice from the theme toggle is handled on top of this:
+         client/ui/ThemeToggle.tsx writes the chosen background into BOTH
+         tags, so whichever one the OS is currently matching reports what the
+         user picked. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ebe9e4" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#201f1d" />
+    <meta name="description" content="Send files between two devices with a link or a QR code. Nothing is stored." />
+    <!-- Served from client/public, so these land at the origin root and are
+         reachable from every client-side route (/new, /join, /s/CODE) — a
+         relative href would resolve against the share path and 404 there. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Kept after the SVG: a browser that understands both takes the last
+         icon it can use, and one that understands neither still has the PNG. -->
+    <link rel="alternate icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Makes the app installable. The service worker the install criteria
+         also want is already here for another reason entirely: client/sw.ts
+         is the download-stream helper, registered at startup by
+         client/save/select.ts, and it has the fetch handler that counts.
+
+         It deliberately caches nothing. This app is two devices talking
+         through a relay — offline it has nothing to do, and a cached shell
+         would only mean an installed window serving a stale index.html
+         pointing at hashed assets a deploy has already deleted. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Quik Share</title>
+
+    <!--
+      Applies a stored theme choice BEFORE the first paint.
+
+      This has to be blocking and inline. React sets the same attribute from
+      client/ui/ThemeToggle.tsx, but that runs after hydration, which is
+      several frames too late: someone who chose dark on a light machine would
+      watch the page flash white first. Reading one string from localStorage
+      is cheap enough to pay for on every load.
+
+      The try/catch is not defensive. localStorage *throws* on access in a
+      Safari private window and wherever site data is blocked, and an uncaught
+      throw in a blocking script here would stop the page from booting at all.
+    -->
+    <script>
+      try {
+        var choice = localStorage.getItem('quik-share-theme');
+        if (choice === 'light' || choice === 'dark') {
+          document.documentElement.setAttribute('data-theme', choice);
+        }
+      } catch (error) {
+        /* No stored choice available; the media queries in tokens.css stand. */
+      }
+    </script>
+  </head>
+  <body>
+    <a href="#main" class="sr-only focus:not-sr-only">Skip to content</a>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,27 @@
+<!--
+  The same two finder patterns client/ui/Logo.tsx draws, at tab size, in the
+  proportions scripts/make-icons.py uses for the PNG fallbacks.
+
+  Two differences from the component, both because a favicon has no page
+  around it: the mark sits on its own rounded tile so it reads against a light
+  and a dark browser chrome alike, and the knockout stroke is painted in the
+  tile colour rather than in var(--color-bg), which does not exist here.
+
+  Stroked rects are inset by half their stroke width, since an SVG stroke
+  straddles its path while Pillow's `outline` is drawn inside the box. That is
+  what keeps the two files the same shape rather than nearly the same shape.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7.04" fill="#2b50e2"/>
+
+  <!-- Upper pattern. -->
+  <rect x="5.3" y="5.3" width="10.37" height="10.37" rx="2.86" fill="none" stroke="#ffffff" stroke-width="2.59"/>
+  <rect x="8.47" y="8.47" width="4.02" height="4.02" rx="1.37" fill="#ffffff"/>
+
+  <!-- The gap between the two, cut in the tile colour. -->
+  <rect x="16.33" y="16.33" width="10.37" height="10.37" rx="2.86" fill="none" stroke="#2b50e2" stroke-width="5.44"/>
+
+  <!-- Lower pattern, over its own knockout. -->
+  <rect x="16.33" y="16.33" width="10.37" height="10.37" rx="2.86" fill="none" stroke="#ffffff" stroke-width="2.59"/>
+  <rect x="19.51" y="19.51" width="4.02" height="4.02" rx="1.37" fill="#ffffff"/>
+</svg>
