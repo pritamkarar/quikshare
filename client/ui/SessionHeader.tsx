@@ -1,9 +1,9 @@
-import type { DeviceInfo } from '../../shared/device.js';
-import type { TransportKind } from '../transport/types.js';
-import { Button } from './Button.js';
-import { DEVICE_KIND } from './device-kind.js';
-import { IconExit, IconRelay } from './icons.js';
-import { TransportBadge } from './TransportBadge.js';
+import type { DeviceInfo } from "../../shared/device.js";
+import type { TransportKind } from "../transport/types.js";
+import { Button } from "./Button.js";
+import { DEVICE_KIND } from "./device-kind.js";
+import { IconExit, IconRelay } from "./icons.js";
+import { TransportBadge } from "./TransportBadge.js";
 
 export interface SessionHeaderProps {
   code: string;
@@ -43,15 +43,32 @@ export interface SessionHeaderProps {
  * this file — so it re-renders exactly when the session it describes changes
  * and never on its own.
  */
-export function SessionHeader({ code, transportKind, self, peer, onEnd }: SessionHeaderProps) {
+export function SessionHeader({
+  code,
+  transportKind,
+  self,
+  peer,
+  onEnd,
+}: SessionHeaderProps) {
   return (
     <header className="neo flex flex-col gap-5 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* connect-pop is the one deliberate entrance in the app: this
             heading only ever mounts at the instant pairing succeeds, which is
             the thing the user has been waiting for. */}
-        <h1 id="transfer-heading" className="connect-pop text-xl font-semibold">Connected</h1>
+        <h1 id="transfer-heading" className="connect-pop text-xl font-semibold">
+          Connected
+        </h1>
         <TransportBadge kind={transportKind} />
+        {/* Capped and centred from `lg`. Left to fill the card, the run
+          between the two devices stretched across most of 1400px, at which
+          width a 3px rule stops reading as a connection and starts reading
+          as a horizontal divider someone left in. */}
+        <div className="flex w-full items-start gap-2 sm:gap-5 lg:mx-auto lg:max-w-[42rem]">
+          <LinkEnd title="This device" device={self} pending="Identifying…" />
+          <Flow direct={transportKind === "webrtc"} />
+          <LinkEnd title="The other device" device={peer} pending="Waiting…" />
+        </div>
         {/* One group, so the code and the way out travel together when the
             row wraps. `justify-between` below `sm` rather than `ml-auto`
             everywhere: at phone width this group is the whole second line,
@@ -72,20 +89,15 @@ export function SessionHeader({ code, transportKind, self, peer, onEnd }: Sessio
               with a transfer in flight, `navigateTo` runs the same confirm that
               already protects JoinLink, and a declined confirm leaves the
               session untouched. */}
-          <Button variant="ghost" icon={<IconExit />} className="shrink-0" onClick={onEnd}>
+          <Button
+            variant="ghost"
+            icon={<IconExit />}
+            className="shrink-0"
+            onClick={onEnd}
+          >
             End session
           </Button>
         </div>
-      </div>
-
-      {/* Capped and centred from `lg`. Left to fill the card, the run
-          between the two devices stretched across most of 1400px, at which
-          width a 3px rule stops reading as a connection and starts reading
-          as a horizontal divider someone left in. */}
-      <div className="flex w-full items-start gap-2 sm:gap-5 lg:mx-auto lg:max-w-[42rem]">
-        <LinkEnd title="This device" device={self} pending="Identifying…" />
-        <Flow direct={transportKind === 'webrtc'} />
-        <LinkEnd title="The other device" device={peer} pending="Waiting…" />
       </div>
     </header>
   );
@@ -96,12 +108,16 @@ export function SessionHeader({ code, transportKind, self, peer, onEnd }: Sessio
  * recessed or flat, which is what makes the row read as two objects with
  * something running between them rather than as three chips in a line.
  */
-function LinkEnd({ title, device, pending }: {
+function LinkEnd({
+  title,
+  device,
+  pending,
+}: {
   title: string;
   device: DeviceInfo | undefined;
   pending: string;
 }) {
-  const Glyph = DEVICE_KIND[device?.kind ?? 'unknown'].icon;
+  const Glyph = DEVICE_KIND[device?.kind ?? "unknown"].icon;
   return (
     <div className="flex min-w-0 basis-24 flex-col items-center gap-2 text-center sm:basis-32">
       <span className="neo inline-flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-surface)] text-xl text-[var(--color-text-muted)] sm:size-14 sm:text-2xl">
@@ -137,9 +153,17 @@ function LinkEnd({ title, device, pending }: {
  * path: two hops through a server in the middle. Direct is one unbroken run.
  */
 function Flow({ direct }: { direct: boolean }) {
-  const line = <span className="flow-line h-[3px] min-w-3 flex-1 rounded-full" data-direct={direct ? '' : undefined} />;
+  const line = (
+    <span
+      className="flow-line h-[3px] min-w-3 flex-1 rounded-full"
+      data-direct={direct ? "" : undefined}
+    />
+  );
   return (
-    <div aria-hidden="true" className="flex min-w-0 flex-1 items-center gap-2 pt-6 sm:gap-3 sm:pt-7">
+    <div
+      aria-hidden="true"
+      className="flex min-w-0 flex-1 items-center gap-2 pt-6 sm:gap-3 sm:pt-7"
+    >
       {line}
       {!direct && (
         <>
