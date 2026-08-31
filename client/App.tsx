@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { navigateTo, parseRoute, titleFor, type Route } from './routing.js';
+import { canonicalFor, navigateTo, parseRoute, titleFor, type Route } from './routing.js';
 import { CreateScreen } from './screens/CreateScreen.js';
 import { LandingScreen } from './screens/LandingScreen.js';
 import { JoinScreen } from './screens/JoinScreen.js';
@@ -33,6 +33,13 @@ export function App() {
   // itself is real, so Tasks 8-10 only need to change strings, not add this.
   useEffect(() => {
     document.title = titleFor(route);
+    // The canonical URL is part of the same "head matches the current
+    // context" job, so it rides the effect that already owns it rather than
+    // getting one of its own. The tag itself is in client/index.html with the
+    // right value for '/', which is what a crawler that runs no JavaScript
+    // sees; this only has to keep it honest once the app navigates.
+    document.querySelector('link[rel="canonical"]')
+      ?.setAttribute('href', canonicalFor(location.pathname));
   }, [route]);
 
   // The session screen is the only one wide enough to use several columns

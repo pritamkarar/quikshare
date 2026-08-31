@@ -109,3 +109,65 @@ for name, size in [
 
 icon(512, maskable=True).save('client/public/icon-maskable-512.png', optimize=True)
 print('icon-maskable-512.png', 512)
+
+
+# ---------------------------------------------------------------------------
+# The social card.
+#
+# Every share of this app is a pasted link, so the Open Graph image is the
+# first thing most people ever see of it. It lives here rather than in its own
+# script because it is the same mark: `icon()` above draws it once, and this
+# pastes that at card scale instead of re-deriving the geometry.
+#
+# Sized 1200x630 — the ratio every platform crops to, and large enough that
+# Twitter's summary_large_image does not upscale it.
+# ---------------------------------------------------------------------------
+from PIL import ImageFont
+
+# The light theme's tokens, since the card is a fixed surface and cannot
+# follow anyone's theme. Must track client/styles/tokens.css.
+CARD_BG = (235, 233, 228, 255)
+CARD_INK = (28, 26, 23, 255)
+CARD_MUTED = (107, 102, 92, 255)
+
+CARD = (1200, 630)
+CARD_PAD = 88
+MARK = 132
+
+# Liberation Sans, not the app's Geist: this runs from a bare checkout with
+# only Pillow, and pulling a webfont out of node_modules would make a
+# build-once asset step depend on `npm install` having happened.
+FONT_DIR = '/usr/share/fonts/truetype/liberation'
+
+
+def card() -> Image.Image:
+    im = Image.new('RGB', CARD, CARD_BG[:3])
+    draw = ImageDraw.Draw(im)
+    bold = ImageFont.truetype(f'{FONT_DIR}/LiberationSans-Bold.ttf', 84)
+    body = ImageFont.truetype(f'{FONT_DIR}/LiberationSans-Regular.ttf', 36)
+    small = ImageFont.truetype(f'{FONT_DIR}/LiberationSans-Regular.ttf', 28)
+
+    tagline = [
+        'Send files between two devices with a link or a QR code.',
+        'Encrypted end to end. No account, no upload, nothing stored.',
+    ]
+    # Measured rather than guessed, so changing the strings or the sizes above
+    # keeps the block centred instead of drifting off the card.
+    lines = 48 + len(tagline) * 52
+    top = (CARD[1] - (MARK + lines)) // 2
+
+    im.paste(icon(MARK), (CARD_PAD, top), icon(MARK))
+    draw.text(
+        (CARD_PAD + MARK + 36, top + MARK // 2), 'Quik Share',
+        font=bold, fill=CARD_INK, anchor='lm',
+    )
+    for index, line in enumerate(tagline):
+        draw.text((CARD_PAD, top + MARK + 48 + index * 52), line, font=body, fill=CARD_MUTED)
+
+    draw.text((CARD_PAD, CARD[1] - CARD_PAD), 'quikshare.qd.je', font=small,
+              fill=ACCENT[:3], anchor='ls')
+    return im
+
+
+card().save('client/public/og.png', optimize=True)
+print('og.png', CARD)

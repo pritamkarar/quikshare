@@ -35,7 +35,7 @@ describe('production SPA fallback', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toMatch(/text\/html/);
-    expect(response.body).toContain('<title>Quik Share</title>');
+    expect(response.body).toContain('<title>Quik Share');
   });
 
   it('still serves the explicit /s/:code route for a share link', async () => {
@@ -49,7 +49,26 @@ describe('production SPA fallback', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('<title>Quik Share</title>');
+    expect(response.body).toContain('<title>Quik Share');
+  });
+
+  it('tells crawlers not to index a share link', async () => {
+    process.env.NODE_ENV = 'production';
+    app = await buildServer();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/s/K7M3QP',
+      headers: { accept: 'text/html' },
+    });
+
+    // The room code is the whole credential, and share links get pasted into
+    // chats, issues and pastebins that crawlers do read. A header rather than
+    // a <meta> tag because index.html is shared by every route, so the tag
+    // would have to be written by JavaScript a crawler need not run; and a
+    // header rather than a robots.txt Disallow because a disallowed URL is
+    // never fetched, so its directive is never read.
+    expect(response.headers['x-robots-tag']).toBe('noindex, nofollow');
   });
 
   it('404s a missing asset rather than answering it with the app shell', async () => {
@@ -67,7 +86,7 @@ describe('production SPA fallback', () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.body).not.toContain('<title>Quik Share</title>');
+    expect(response.body).not.toContain('<title>Quik Share');
   });
 
   it('404s an unregistered route even when the request has no Accept header at all', async () => {
@@ -96,7 +115,7 @@ describe('production SPA fallback', () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.body).not.toContain('<title>Quik Share</title>');
+    expect(response.body).not.toContain('<title>Quik Share');
   });
 });
 

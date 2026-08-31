@@ -1,0 +1,26 @@
+# Served from the origin root by @fastify/static in production and by Vite in
+# development, so one file covers both.
+
+User-agent: *
+Allow: /
+
+# NOT a privacy rule — a resource rule. /new mounts CreateScreen, which asks
+# the relay for a room the instant it renders (see client/screens/
+# LandingScreen.tsx). A crawler following the landing page's buttons would
+# burn a six-character code and a slot in the create rate limit on every
+# visit, for a session nobody asked for. This is the one route that must not
+# be fetched at all.
+Disallow: /new
+
+# The service worker's virtual download path and the manifest's share target.
+# Neither is a page: one is answered inside the worker, the other is a POST.
+Disallow: /__download/
+Disallow: /share-target
+
+# /s/ is deliberately absent from this list. A room code must never reach a
+# search index, and Disallow cannot promise that — a disallowed URL is not
+# fetched, so its noindex is never read, and it can still be indexed from a
+# link alone. The server sends `X-Robots-Tag: noindex` on /s/:code instead
+# (server/index.ts), which requires the crawl to be allowed in order to work.
+
+Sitemap: https://quikshare.qd.je/sitemap.xml

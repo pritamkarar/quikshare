@@ -237,7 +237,19 @@ export async function buildServer(limits: ServerLimits = {}): Promise<FastifyIns
     // an explicit route (rather than folded into the fallback below) because
     // it's the one path the fallback's Accept-header heuristic must not be
     // the only thing standing behind — it's explicit, and it's tested.
-    app.get('/s/:code', (_request, reply) => reply.sendFile('index.html'));
+    app.get('/s/:code', (_request, reply) => {
+      // A room code is a credential — it is the whole of it — and a share
+      // link gets pasted into chats, issue trackers and pastebins that
+      // crawlers do read. `noindex` is sent as a header rather than as a
+      // <meta> tag because the tag would live in the shared index.html and
+      // would therefore have to be written by JavaScript, which a crawler is
+      // not obliged to run; and it is sent rather than the path being
+      // disallowed in robots.txt because a disallowed URL is never fetched,
+      // so its directive is never read, and can still be indexed from a link
+      // alone. Allowing the crawl is what makes the refusal stick.
+      reply.header('X-Robots-Tag', 'noindex, nofollow');
+      return reply.sendFile('index.html');
+    });
 
     // Only ever reached when no service worker was controlling — the worker
     // answers this POST from client/sw.ts and nothing gets this far. The body

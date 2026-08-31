@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Two URLs, because two is how many indexable pages this app has. /new is
+  disallowed in robots.txt (it has a side effect on load) and /s/:code carries
+  a noindex header, which leaves the landing page and the code entry screen.
+
+  No <lastmod>, <changefreq> or <priority>: the first would be a hand-written
+  date that goes stale the moment it is wrong, and Google ignores the other
+  two outright. A static file with two honest URLs beats a generator here.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://quikshare.qd.je/</loc></url>
+  <url><loc>https://quikshare.qd.je/join</loc></url>
+</urlset>

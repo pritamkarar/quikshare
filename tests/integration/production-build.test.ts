@@ -24,6 +24,43 @@ describe('production artifacts', () => {
     expect(start).toContain(cmdEntry);
   });
 
+  it('keeps every hardcoded copy of the canonical site origin in agreement', () => {
+    // The origin is written out by hand in four places, because each is read
+    // by something that cannot call a function: two static files, a <link>
+    // and <meta> block that must be right before any JavaScript runs, and the
+    // constant client/App.tsx rewrites them from. Centralising it would mean
+    // generating the static files at build time to save four literals, so
+    // this test is the trade instead — it catches the failure that actually
+    // happens, which is one copy drifting to http://, to a www. host, or to
+    // a platform's default subdomain, and thereby splitting the site's
+    // ranking across two origins with no visible symptom.
+    const ORIGIN = 'https://quikshare.qd.je';
+
+    // Anything in client/public is copied to the origin root by Vite, which
+    // is the only place a crawler will look for these two.
+    for (const name of ['robots.txt', 'sitemap.xml', 'og.png']) {
+      expect(
+        existsSync(new URL(`../../client/public/${name}`, import.meta.url)),
+        `client/public/${name} must exist to be served from the origin root`,
+      ).toBe(true);
+    }
+
+    const sources: [string, string][] = [
+      ['client/index.html', read('../../client/index.html')],
+      ['client/routing.ts', read('../../client/routing.ts')],
+      ['client/public/robots.txt', read('../../client/public/robots.txt')],
+      ['client/public/sitemap.xml', read('../../client/public/sitemap.xml')],
+    ];
+
+    for (const [name, text] of sources) {
+      expect(text, `${name} must name the canonical origin`).toContain(ORIGIN);
+      const strays = [...text.matchAll(/https?:\/\/[a-z0-9.-]*quikshare[a-z0-9.-]*/gi)]
+        .map((match) => match[0]!)
+        .filter((url) => url !== ORIGIN);
+      expect(strays, `${name} names an origin other than ${ORIGIN}`).toEqual([]);
+    }
+  });
+
   it('documents every environment variable the server and client actually read', () => {
     expect(existsSync(new URL('../../docs/deployment.md', import.meta.url))).toBe(true);
     const doc = read('../../docs/deployment.md');

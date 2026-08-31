@@ -45,6 +45,34 @@ describe('App', () => {
     }
   });
 
+  /*
+   * The canonical URL is the same job as <title> — the head describing the
+   * current context — and it is what stops '/join', '/join/' and
+   * '/s/CODE?filter=images' being read as separate pages of duplicated
+   * content. The tag itself ships in client/index.html; jsdom renders into a
+   * bare document, so it has to be put back before App can update it.
+   */
+  it('points the canonical link at the current route, without a query or a trailing slash', () => {
+    const link = document.createElement('link');
+    link.rel = 'canonical';
+    document.head.append(link);
+
+    const cases = [
+      ['/', 'https://quikshare.qd.je/'],
+      ['/join/', 'https://quikshare.qd.je/join'],
+      ['/s/K7M3QP?filter=images', 'https://quikshare.qd.je/s/K7M3QP'],
+    ] as const;
+
+    for (const [path, expected] of cases) {
+      history.pushState(null, '', path);
+      const { unmount } = render(<App />);
+      expect(link.href).toBe(expected);
+      unmount();
+    }
+
+    link.remove();
+  });
+
   it('renders the landing screen at the root, inside a main landmark', () => {
     render(<App />);
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main');

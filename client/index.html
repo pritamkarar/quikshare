@@ -15,7 +15,18 @@
          user picked. -->
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ebe9e4" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#201f1d" />
-    <meta name="description" content="Send files between two devices with a link or a QR code. Nothing is stored." />
+    <!-- The description a search result shows under the title, so it is
+         written for someone reading it there rather than as a slogan: what
+         the thing does, on what, and the three constraints people actually
+         search for (no account, no size limit, nothing stored). -->
+    <meta name="description" content="Send files between your phone and laptop with a link or a QR code. Encrypted end to end, no account, no install, no size limit — nothing is ever stored on a server." />
+
+    <!-- Every route serves this same shell, so a static canonical would tell
+         a crawler that /join is a duplicate of '/'. The href here is the
+         correct answer for '/' alone, and client/App.tsx rewrites it from the
+         route — this tag exists so that there is something to rewrite, and so
+         the value is right before any JavaScript runs. -->
+    <link rel="canonical" href="https://quikshare.qd.je/" />
     <!-- Served from client/public, so these land at the origin root and are
          reachable from every client-side route (/new, /join, /s/CODE) — a
          relative href would resolve against the share path and 404 there. -->
@@ -34,7 +45,64 @@
          would only mean an installed window serving a stale index.html
          pointing at hashed assets a deploy has already deleted. -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <title>Quik Share</title>
+    <!-- Matches titleFor({ t: 'home' }) in client/routing.ts exactly. React
+         overwrites this on mount, so the only reader of the static value is
+         something that does not run scripts — a crawler, a link unfurler, a
+         reader mode — and for those the bare brand word was the whole page. -->
+    <title>Quik Share · Send files between devices</title>
+
+    <!--
+      What a pasted link looks like. This matters more here than on most
+      sites: the entire product is a link you send to someone, so these tags
+      are not marketing decoration, they are the first screen a second person
+      ever sees of the app.
+
+      og:image is absolute because it must be — a relative one resolves
+      against the crawler's own base and fetches nothing. /og.png is drawn by
+      scripts/make-icons.py from the same mark as the favicons.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Quik Share" />
+    <meta property="og:url" content="https://quikshare.qd.je/" />
+    <meta property="og:title" content="Quik Share · Send files between devices" />
+    <meta property="og:description" content="Send files between your phone and laptop with a link or a QR code. Encrypted end to end, no account, no install, no size limit." />
+    <meta property="og:image" content="https://quikshare.qd.je/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Quik Share — send files between two devices with a link or a QR code." />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!--
+      Structured data. `SoftwareApplication` rather than `WebSite`, because
+      the thing at this URL is an application and not a page about one, and
+      because it is the type that makes the price eligible to be shown.
+
+      `offers` is present rather than omitted on purpose: leaving it out
+      leaves "is this paid?" unanswered, and for a tool whose alternative is
+      a paid upload service that is the question worth answering in the
+      search result itself.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Quik Share",
+        "url": "https://quikshare.qd.je/",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires a browser with WebRTC and WebCrypto.",
+        "description": "Send files between two devices with a link or a QR code. The devices agree an encryption key directly and the relay only ever carries ciphertext, so nothing is stored and no account is needed.",
+        "featureList": [
+          "End-to-end encrypted transfers with a verification number",
+          "Direct browser-to-browser transfer, relayed when the network blocks it",
+          "No account, no install, no file size limit",
+          "Live camera and screen sharing",
+          "Pair by QR code or a six-character code"
+        ],
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
 
     <!--
       Applies a stored theme choice BEFORE the first paint.

@@ -193,7 +193,7 @@ describe('GET /turn', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/application\/json/);
-    expect(res.body).not.toContain('<title>Quik Share</title>');
+    expect(res.body).not.toContain('<title>Quik Share');
     const body = res.json() as { iceServers: { urls: string[]; username: string; credential: string }[]; ttl: number };
     expect(body.iceServers[0]!.username).toMatch(/^\d+:quikshare$/);
   });

@@ -132,6 +132,31 @@ export function titleFor(route: Route): string {
 }
 
 /**
+ * The one origin every canonical URL is written against.
+ *
+ * Hardcoded rather than read from `location.origin`, and that is the whole
+ * point of the tag: a site reachable at more than one hostname (apex and
+ * `www`, a preview deployment, the render.com default subdomain) would
+ * otherwise declare each copy canonical to itself and split its own ranking
+ * across all of them. One literal here means every copy points at the same
+ * place.
+ */
+const CANONICAL_ORIGIN = 'https://quikshare.qd.je';
+
+/**
+ * The canonical URL for a path.
+ *
+ * Takes the pathname rather than a `Route` because normalising is the job:
+ * `/join` and `/join/` are the same screen and `?filter=images` is a view
+ * preference, so query, fragment and a trailing slash all come off. A `Route`
+ * has already lost the distinctions this exists to collapse.
+ */
+export function canonicalFor(pathname: string): string {
+  const path = pathname.replace(/\/+$/, '');
+  return `${CANONICAL_ORIGIN}${path || '/'}`;
+}
+
+/**
  * The record's active filter, read from `?filter=`.
  *
  * A query parameter rather than part of the path: the path identifies the
