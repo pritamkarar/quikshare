@@ -164,7 +164,7 @@ export function LandingScreen() {
 
           <div className="flex w-full max-w-sm flex-col gap-3 pt-1 sm:flex-row sm:justify-center lg:justify-start">
             <Button icon={<IconPlus />} className="sm:min-w-44" onClick={() => navigateTo('/new')}>
-              Create a session
+              Start transfer/receive
             </Button>
             <Button variant="ghost" icon={<IconLink />} className="sm:min-w-44" onClick={() => navigateTo('/join')}>
               Join a session
@@ -346,7 +346,7 @@ export function LandingScreen() {
           </p>
           <div className="flex w-full max-w-sm flex-col gap-3 pt-1 sm:flex-row sm:justify-center">
             <Button icon={<IconPlus />} className="sm:min-w-44" onClick={() => navigateTo('/new')}>
-              Create a session
+              Start transfer/receive
             </Button>
             <Button variant="ghost" icon={<IconLink />} className="sm:min-w-44" onClick={() => navigateTo('/join')}>
               Join a session

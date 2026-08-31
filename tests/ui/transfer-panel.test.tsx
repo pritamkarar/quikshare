@@ -544,9 +544,9 @@ describe('TransferPanel', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('offers the join link as a way out, even mid-transfer', () => {
+  it('drops the join link, which has nothing left to offer once paired', () => {
     render(<TransferPanel session={fakeSession()} />);
-    expect(screen.getByRole('link', { name: /join a session/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /join a session/i })).not.toBeInTheDocument();
   });
 
   /*
@@ -576,24 +576,13 @@ describe('TransferPanel', () => {
 /**
  * The in-app half of AGENTS.md's "warn on unsaved changes before navigation".
  * `beforeunload` (covered in transfer-guards.test.tsx) does not fire for
- * pushState, and this link is deliberately the only route off this screen —
+ * pushState, and End session is deliberately the only route off this screen —
  * so clicking it used to unmount the panel and terminate the worker
  * mid-transfer with no warning at all.
  */
 describe('TransferPanel: leaving mid-transfer', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it('confirms before an in-app link cancels a live transfer', async () => {
-    const confirmed = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const pushState = vi.spyOn(history, 'pushState');
-    render(<TransferPanel session={fakeSession({ files: [tracked()] })} />);
-
-    await userEvent.click(screen.getByRole('link', { name: /join a session/i }));
-
-    expect(confirmed).toHaveBeenCalled();
-    expect(pushState).not.toHaveBeenCalled();
   });
 
   /*
@@ -623,25 +612,15 @@ describe('TransferPanel: leaving mid-transfer', () => {
     expect(replaceState).toHaveBeenCalledWith(null, '', '/');
   });
 
-  it('navigates once the user accepts losing the transfer', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const pushState = vi.spyOn(history, 'pushState');
-    render(<TransferPanel session={fakeSession({ files: [tracked()] })} />);
-
-    await userEvent.click(screen.getByRole('link', { name: /join a session/i }));
-
-    expect(pushState).toHaveBeenCalled();
-  });
-
-  it('does not interrupt navigation when nothing is in flight', async () => {
+  it('does not interrupt leaving when the files on screen are all finished', async () => {
     const confirmed = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const pushState = vi.spyOn(history, 'pushState');
+    const replaceState = vi.spyOn(history, 'replaceState');
     render(<TransferPanel session={fakeSession({ files: [tracked({ done: true })] })} />);
 
-    await userEvent.click(screen.getByRole('link', { name: /join a session/i }));
+    await userEvent.click(screen.getByRole('button', { name: /end session/i }));
 
     expect(confirmed).not.toHaveBeenCalled();
-    expect(pushState).toHaveBeenCalled();
+    expect(replaceState).toHaveBeenCalled();
   });
 });
 

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DropZone } from '../ui/DropZone.js';
 import { TextSnippet } from '../ui/TextSnippet.js';
 import { TransferRecord } from '../ui/TransferRecord.js';
-import { JoinLink } from '../ui/JoinLink.js';
 import { DevicePanel } from '../ui/DevicePanel.js';
 import { Button } from '../ui/Button.js';
 import { LiveSection, TurnCaution, failureText } from '../ui/LiveSection.js';
@@ -43,8 +42,9 @@ export interface TransferPanelProps {
  *
  * Files can only transfer while paired — this is the only screen a per-file
  * error, a save-tier notice, or a stalled handshake can ever surface on — so
- * unlike the placeholder it replaces, it renders all three of `session.error`,
- * `session.notice` and a way out (`JoinLink`), never just a silent "Connected".
+ * unlike the placeholder it replaces, it renders both `session.error` and
+ * `session.notice`, never just a silent "Connected". The way out is
+ * SessionHeader's "End session" — a paired session has nothing to join.
  */
 export function TransferPanel({ session, pending, onPendingSent }: TransferPanelProps) {
   useTransferGuards(session.files);
@@ -472,16 +472,11 @@ export function TransferPanel({ session, pending, onPendingSent }: TransferPanel
       {/* Last of the content, below the two alert slots above rather than
           between them and the transfer they describe: this is reference
           material — "which of my devices is this?" — that a user consults
-          once and then scrolls past, not part of the send/receive flow. It
-          stays above JoinLink, which is the way out and belongs last. */}
+          once and then scrolls past, not part of the send/receive flow. */}
       {/* Gated with the workspace above, not with the alerts between them:
           this describes the pair you are about to move files between, so it
           belongs to the same moment those controls do. */}
       {verified && <DevicePanel self={session.selfDevice} peer={session.peerDevice} />}
-
-      {/* No dead ends: a per-file error lands here, and this is the only
-          route out of this screen, so it must exist alongside it. */}
-      <JoinLink />
     </section>
   );
 }

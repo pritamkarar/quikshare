@@ -3,11 +3,12 @@ import { navigateTo } from '../routing.js';
 
 /**
  * A user who was read a code over the phone has nothing to scan, so this
- * route out has to exist on every screen a session can reach — including
- * ones where the session failed, or where it is already paired and mid
- * transfer — which would otherwise be dead ends. Shared rather than
- * duplicated per screen: two copies of the modifier-key handling below is
- * exactly the kind of drift a single component avoids.
+ * route out has to exist on every screen that is still waiting to pair, or
+ * where the session failed, which would otherwise be dead ends. Not on the
+ * paired screen: there is nothing left to join there, and "End session" is
+ * the way out. Shared rather than duplicated per screen: two copies of the
+ * modifier-key handling below is exactly the kind of drift a single
+ * component avoids.
  */
 export function JoinLink() {
   function handleClick(event: MouseEvent<HTMLAnchorElement>): void {

@@ -197,7 +197,11 @@ describe('CreateScreen', () => {
     act(() => worker.emit({ t: 'peer-joined' }));
 
     await screen.findByText(/connected/i);
-    expect(screen.getByRole('link', { name: /join a session/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /end session/i })).toBeInTheDocument();
+    // And only that one: the join link belongs on the screens still waiting
+    // to pair, where it replaced the QR. Once paired there is nothing left
+    // to join, and offering it here reads as a second, contradictory exit.
+    expect(screen.queryByRole('link', { name: /join a session/i })).not.toBeInTheDocument();
   });
 
   /*

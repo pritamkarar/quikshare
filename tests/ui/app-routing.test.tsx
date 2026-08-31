@@ -245,7 +245,7 @@ describe('App', () => {
     render(<App />);
     const landingTitle = document.title;
     expect(landingTitle).toContain('Quik Share');
-    await userEvent.click(screen.getAllByRole('button', { name: /join a device/i })[0]!);
+    await userEvent.click(screen.getAllByRole('button', { name: /join a session/i })[0]!);
     expect(document.title).not.toBe(landingTitle);
     expect(document.title).toContain('Join');
   });

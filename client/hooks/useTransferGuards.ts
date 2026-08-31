@@ -71,11 +71,11 @@ export function useTransferGuards(files: TrackedFile[]): void {
     };
     addEventListener('beforeunload', onBeforeUnload);
     // The other half of the same MUST. `beforeunload` never fires for
-    // `history.pushState`, and TransferPanel deliberately renders JoinLink as
-    // the only route off the screen — so clicking it unmounted the panel and
-    // terminated the worker mid-transfer, silently. The native dialog is
-    // deliberate: it is keyboard-operable and announced everywhere, which a
-    // hand-rolled modal would have to earn.
+    // `history.pushState`, and the only route off this screen is an in-app
+    // one (SessionHeader's "End session") — so clicking it unmounted the
+    // panel and terminated the worker mid-transfer, silently. The native
+    // dialog is deliberate: it is keyboard-operable and announced
+    // everywhere, which a hand-rolled modal would have to earn.
     setNavigationGuard(() => confirm(LEAVE_PROMPT));
     // KNOWN GAP: this covers pushState (every in-app link and button) and the
     // handler above covers closing or reloading the tab. It does NOT cover the

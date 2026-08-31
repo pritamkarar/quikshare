@@ -20,7 +20,7 @@ describe('LandingScreen', () => {
   it('offers both ways in, in the hero and again at the foot', () => {
     render(<LandingScreen />);
     expect(screen.getAllByRole('button', { name: /start transfer/i })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: /join a device/i })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /join a session/i })).toHaveLength(2);
   });
 
   /*
@@ -91,7 +91,7 @@ describe('LandingScreen', () => {
   it('routes to /join', async () => {
     const pushState = vi.spyOn(history, 'pushState');
     render(<LandingScreen />);
-    await userEvent.click(screen.getAllByRole('button', { name: /join a device/i })[0]!);
+    await userEvent.click(screen.getAllByRole('button', { name: /join a session/i })[0]!);
     expect(pushState).toHaveBeenCalledWith(null, '', '/join');
   });
 
