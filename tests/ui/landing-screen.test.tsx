@@ -14,12 +14,12 @@ describe('LandingScreen', () => {
    * Twice each, and that is the point: the hero offers both actions to
    * someone who arrived already convinced, and the band closing the page
    * offers them again to someone who read the whole thing. Same two labels
-   * both times — one label per intent, so "Start transfer/receive" is never
+   * both times — one label per intent, so "Start a session" is never
    * competing with a "Start sharing" that means the same thing.
    */
   it('offers both ways in, in the hero and again at the foot', () => {
     render(<LandingScreen />);
-    expect(screen.getAllByRole('button', { name: /start transfer/i })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /start a session/i })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: /join a session/i })).toHaveLength(2);
   });
 
@@ -84,7 +84,7 @@ describe('LandingScreen', () => {
   it('routes to /new rather than creating in place', async () => {
     const pushState = vi.spyOn(history, 'pushState');
     render(<LandingScreen />);
-    await userEvent.click(screen.getAllByRole('button', { name: /start transfer/i })[0]!);
+    await userEvent.click(screen.getAllByRole('button', { name: /start a session/i })[0]!);
     expect(pushState).toHaveBeenCalledWith(null, '', '/new');
   });
 

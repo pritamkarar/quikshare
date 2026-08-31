@@ -237,7 +237,7 @@ test.describe('gap 4: real tap-target sizes', () => {
     // failed as one, which meant the floor below had never actually been
     // measured on this screen. Only a readiness signal: the assertion that
     // follows walks every control on the page regardless.
-    await expect(page.getByRole('button', { name: /start transfer/i }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /start a session/i }).first()).toBeVisible();
     await assertFloor(page, DESKTOP_FLOOR);
 
     await page.setViewportSize({ width: 390, height: 844 });

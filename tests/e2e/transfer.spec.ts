@@ -142,7 +142,7 @@ test('ending the session sends the other device home, not to a rejoin screen', a
     // so the guest sat on "The other device disconnected" with a QR offering
     // to rejoin a room that had gone with the host.
     await expect(guest.page).toHaveURL(/\/$/, { timeout: 20_000 });
-    await expect(guest.page.getByRole('button', { name: /start transfer/i }).first()).toBeVisible();
+    await expect(guest.page.getByRole('button', { name: /start a session/i }).first()).toBeVisible();
     await expect(guest.page.getByText(/the other device disconnected/i)).toBeHidden();
   } finally {
     await closePair(session);

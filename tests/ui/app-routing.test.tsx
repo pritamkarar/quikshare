@@ -78,7 +78,7 @@ describe('App', () => {
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main');
     // getAllBy, not getBy: the landing page offers both actions twice, in the
     // hero and again in the band that closes the page.
-    expect(screen.getAllByRole('button', { name: /start transfer/i })).not.toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: /start a session/i })).not.toHaveLength(0);
   });
 
   /*
@@ -103,7 +103,7 @@ describe('App', () => {
   it('creates a session from the landing screen only when asked', async () => {
     render(<App />);
     expect(FakeWorker.latest()).toBeUndefined();
-    await userEvent.click(screen.getAllByRole('button', { name: /start transfer/i })[0]!);
+    await userEvent.click(screen.getAllByRole('button', { name: /start a session/i })[0]!);
     expect(screen.getByRole('heading', { name: /scan to connect/i })).toBeInTheDocument();
     await waitFor(() => expect(FakeWorker.latest()?.last('init')).toBeDefined());
   });
