@@ -114,9 +114,8 @@ describe('TransferPanel: the verification gate', () => {
   it('still hides them when only this device has confirmed', () => {
     render(<TransferPanel session={fakeSession({ verifiedByMe: true })} />);
 
-    // 'Confirmed here', not the 'waiting' half of that sentence: the device
-    // panel is also on this screen, saying it is waiting for the other
-    // device to describe itself.
+    // 'Confirmed here', not the 'waiting' half of that sentence: the header
+    // above is also on this screen, and its peer end says "Waiting…" too.
     expect(screen.getByText(/confirmed here/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /share camera/i })).not.toBeInTheDocument();
   });
@@ -143,7 +142,7 @@ describe('TransferPanel: the verification gate', () => {
     // default fixture cannot offer a picker in either state.
     const { rerender } = render(<TransferPanel session={fakeSession({ canChooseFolder: true })} />);
 
-    for (const name of [/share/i, /transfers/i, /devices/i]) {
+    for (const name of [/share/i, /transfers/i]) {
       expect(screen.queryByRole('region', { name })).not.toBeInTheDocument();
     }
     // Including the folder picker, which lives in the Transfers column and
@@ -156,7 +155,7 @@ describe('TransferPanel: the verification gate', () => {
         session={fakeSession({ canChooseFolder: true, verifiedByMe: true, verifiedByPeer: true })}
       />,
     );
-    for (const name of [/share/i, /transfers/i, /devices/i]) {
+    for (const name of [/share/i, /transfers/i]) {
       expect(screen.getByRole('region', { name })).toBeInTheDocument();
     }
     expect(screen.getByRole('button', { name: /folder/i })).toBeInTheDocument();

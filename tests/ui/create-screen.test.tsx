@@ -205,9 +205,11 @@ describe('CreateScreen', () => {
   });
 
   /*
-   * The whole point of the device panel: telling one of your own devices
-   * from another. The self card is filled from the relay's own answer (which
-   * only the server can supply), the peer card from a sealed control frame.
+   * Two descriptions arriving by two different routes: this device's from
+   * the relay's own answer (which only the server can supply), the peer's
+   * from a sealed control frame. Asserted on the header's two ends, which
+   * is where the pair is drawn now that the fuller Devices panel is gone —
+   * the routes being tested are the same ones either way.
    */
   it('shows both devices once each side has described itself', async () => {
     const { worker } = await startSession();
@@ -215,13 +217,10 @@ describe('CreateScreen', () => {
     act(() => worker.emit({ t: 'peer-joined' }));
     act(() => worker.emit({ t: 'peer-device', info: PEER_DEVICE }));
     await screen.findByText(/connected/i);
-    // The device panel is past the gate now, with Share and Transfers.
     await passVerification(worker);
 
-    expect(screen.getByText('Safari on macOS')).toBeInTheDocument();
-    expect(screen.getByText('a1b2-c3d4-e5f6')).toBeInTheDocument();
-    expect(screen.getByText('Chrome on Android')).toBeInTheDocument();
-    expect(screen.getByText('9f8e-7d6c-5b4a')).toBeInTheDocument();
+    expect(screen.getByText('macOS')).toBeInTheDocument();
+    expect(screen.getByText('Android')).toBeInTheDocument();
   });
 
   /*
@@ -236,35 +235,37 @@ describe('CreateScreen', () => {
     act(() => worker.emit({ t: 'peer-joined' }));
     act(() => worker.emit({ t: 'peer-device', info: PEER_DEVICE }));
     await passVerification(worker);
-    await screen.findByText('9f8e-7d6c-5b4a');
+    await screen.findByText('Android');
 
     act(() => worker.emit({ t: 'peer-left', reason: 'peer-left' }));
     act(() => worker.emit({ t: 'peer-joined' }));
     await screen.findByText(/connected/i);
 
-    expect(screen.queryByText('9f8e-7d6c-5b4a')).not.toBeInTheDocument();
-    expect(screen.getByText(/waiting for the other device/i)).toBeInTheDocument();
-    // The self card is unaffected: this device did not go anywhere.
-    expect(screen.getByText('a1b2-c3d4-e5f6')).toBeInTheDocument();
+    expect(screen.queryByText('Android')).not.toBeInTheDocument();
+    // The header's peer end falls back to its own pending text rather than
+    // keeping the departed device's OS under a new device's glyph.
+    expect(screen.getByText('Waiting…')).toBeInTheDocument();
+    // This device did not go anywhere, so its own end is unaffected.
+    expect(screen.getByText('macOS')).toBeInTheDocument();
   });
 
   /*
-   * A later `self-device` message must reach the card, not just the first
-   * one. Asserted on the screen size rather than the address it used to
-   * use, because the address is no longer rendered anywhere — the update
-   * path being tested is the same one either way, and dropping the test
-   * with the row would have left it unguarded.
+   * A later `self-device` message must reach the screen, not just the first
+   * one. Asserted on the OS now, for the same reason it was asserted on the
+   * screen size before that and the address before that: the field moves,
+   * the update path does not, and dropping the test with the row it used to
+   * read would leave that path unguarded.
    */
   it('follows this device description when a mid-session update changes it', async () => {
     const { worker } = await startSession();
     act(() => worker.emit({ ...READY, device: SELF_DEVICE }));
     act(() => worker.emit({ t: 'peer-joined' }));
     await passVerification(worker);
-    await screen.findByText('2560 × 1440');
+    await screen.findByText('macOS');
 
-    act(() => worker.emit({ t: 'self-device', info: { ...SELF_DEVICE, screen: '1920 × 1080' } }));
-    expect(await screen.findByText('1920 × 1080')).toBeInTheDocument();
-    expect(screen.queryByText('2560 × 1440')).not.toBeInTheDocument();
+    act(() => worker.emit({ t: 'self-device', info: { ...SELF_DEVICE, os: 'Windows' } }));
+    expect(await screen.findByText('Windows')).toBeInTheDocument();
+    expect(screen.queryByText('macOS')).not.toBeInTheDocument();
   });
 
   it('tells the worker what this device is, so the peer can be told in turn', async () => {

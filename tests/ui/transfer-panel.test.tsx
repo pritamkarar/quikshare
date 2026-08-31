@@ -507,11 +507,14 @@ describe('TransferPanel', () => {
     expect(screen.getByRole('textbox', { name: /text to send/i })).toBeInTheDocument();
   });
 
-  it('groups the screen into Share, Transfers and Devices', () => {
+  it('groups the screen into Share and Transfers, and no longer a third Devices section', () => {
     render(<TransferPanel session={fakeSession()} />);
     expect(screen.getByRole('region', { name: /share/i })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /transfers/i })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: /devices/i })).toBeInTheDocument();
+    // The pair is drawn once, in the header. A second, fuller description of
+    // the same two devices under the transfer record was reference material
+    // nobody scrolled back to.
+    expect(screen.queryByRole('region', { name: /devices/i })).not.toBeInTheDocument();
   });
 
   it('puts the record beside the controls rather than below them', () => {

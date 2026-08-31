@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DropZone } from '../ui/DropZone.js';
 import { TextSnippet } from '../ui/TextSnippet.js';
 import { TransferRecord } from '../ui/TransferRecord.js';
-import { DevicePanel } from '../ui/DevicePanel.js';
 import { Button } from '../ui/Button.js';
 import { LiveSection, TurnCaution, failureText } from '../ui/LiveSection.js';
 import { VerifyPanel } from '../ui/VerifyPanel.js';
@@ -329,8 +328,8 @@ export function TransferPanel({ session, pending, onPendingSent }: TransferPanel
 
       {/*
        * One screen at a time: while the gate stands it is the ONLY thing
-       * here, and Share, Transfers and Devices arrive together the moment
-       * both devices have confirmed.
+       * here, and Share and Transfers arrive together the moment both
+       * devices have confirmed.
        *
        * `verified` is both sides, not this one. Session refuses every send
        * until both have confirmed (client/session.ts's `#requireVerified`),
@@ -347,9 +346,7 @@ export function TransferPanel({ session, pending, onPendingSent }: TransferPanel
        * compared are the whole job at that moment and everything else on the
        * page is something to look at instead of doing it. The costs are
        * real and named here so they are not rediscovered as bugs: the folder
-       * picker is no longer offered before files can arrive, and the Devices
-       * panel — "did I pair with the device I meant to?" — is not on screen
-       * while that is exactly the question being asked.
+       * picker is no longer offered before files can arrive.
        */}
       {!verified ? (
         <VerifyPanel
@@ -477,15 +474,6 @@ export function TransferPanel({ session, pending, onPendingSent }: TransferPanel
           {session.error}
         </p>
       )}
-
-      {/* Last of the content, below the two alert slots above rather than
-          between them and the transfer they describe: this is reference
-          material — "which of my devices is this?" — that a user consults
-          once and then scrolls past, not part of the send/receive flow. */}
-      {/* Gated with the workspace above, not with the alerts between them:
-          this describes the pair you are about to move files between, so it
-          belongs to the same moment those controls do. */}
-      {verified && <DevicePanel self={session.selfDevice} peer={session.peerDevice} />}
     </section>
   );
 }

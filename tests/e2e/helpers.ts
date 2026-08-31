@@ -73,8 +73,8 @@ export async function pair(browser: Browser, forceTransport?: 'relay', extraPerm
  *
  * Its own exported step because `pair()` is not the only place that needs
  * it. A reload re-agrees the key, which clears both confirmations
- * (useSession's 'verification' case), and the whole workspace — Share,
- * Transfers, Devices — is behind this gate now
+ * (useSession's 'verification' case), and the whole workspace — Share and
+ * Transfers — is behind this gate now
  * (client/screens/TransferPanel.tsx), so any test that reloads and then
  * expects to see the session again has to come back through here.
  */
