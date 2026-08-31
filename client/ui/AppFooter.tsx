@@ -43,7 +43,7 @@ export function AppFooter() {
           // baseline of the row despite the 44px box.
           className="inline-flex min-h-11 items-center text-sm text-[var(--color-text-muted)] underline decoration-[var(--color-border-strong)] underline-offset-4 hover:text-[var(--color-text)] hover:decoration-[var(--color-accent)]"
         >
-          Source and MIT licence on GitHub
+          Star on GitHub
           <span className="sr-only"> (opens in a new tab)</span>
         </a>
       </div>

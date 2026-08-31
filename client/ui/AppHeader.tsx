@@ -87,7 +87,7 @@ export function AppHeader() {
                 the mark alone is unmistakable and the bar is tight. Hidden
                 visually there rather than removed, so the accessible name
                 survives at every width. */}
-            <span className="sr-only sm:not-sr-only">GitHub</span>
+            <span className="sr-only sm:not-sr-only">Star on GitHub</span>
             {/* Opening a new tab without warning is a surprise a screen reader
                 user gets no other cue about. */}
             <span className="sr-only"> (opens in a new tab)</span>
