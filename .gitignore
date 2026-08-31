@@ -16,3 +16,5 @@ playwright/.cache/
 .superpowers/
 .claude/
 .worktrees/
+
+docs/.internal/
