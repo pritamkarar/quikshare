@@ -193,12 +193,14 @@ test.describe('session layout', () => {
       expect(clientHeight).toBeLessThanOrEqual(360);
       expect(scrollHeight).toBeGreaterThan(clientHeight);
 
-      // --- Mobile width: one column, Transfers stacked below Share. ---
+      // --- Mobile width: one column, Transfers stacked ABOVE Share. ---
       await host.page.setViewportSize({ width: 412, height: 900 });
       const mobile = await columnBoxes(host.page);
-      // Stacked: Transfers starts at or below where Share ends, with no
-      // overlap — the opposite relationship from the desktop check above.
-      expect(mobile.transfers.y).toBeGreaterThanOrEqual(mobile.share.y + mobile.share.height - 1);
+      // Stacked, and in the reverse of DOM order: `order-first` on Transfers
+      // puts the record above the Share stack, so what arrived is visible
+      // without scrolling past the whole send column. columnBoxes still
+      // names them by DOM position, which is why this reads share-below.
+      expect(mobile.share.y).toBeGreaterThanOrEqual(mobile.transfers.y + mobile.transfers.height - 1);
       // Same column: left edges line up.
       expect(Math.abs(mobile.share.x - mobile.transfers.x)).toBeLessThan(2);
     } finally {

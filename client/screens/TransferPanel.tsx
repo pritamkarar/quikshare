@@ -453,7 +453,20 @@ export function TransferPanel({ session, pending, onPendingSent }: TransferPanel
           </div>
         </section>
 
-        <section aria-labelledby="transfers-heading" className="flex min-w-0 flex-col gap-4">
+        {/* First in the single column below `sm`, last in the DOM. On a phone
+            the Share stack (drop zone, note box, two Share buttons) is most
+            of a screen tall, so leaving Transfers under it meant scrolling
+            past everything you just did to see whether it arrived — and the
+            record is the half that changes on its own.
+
+            Visual order only, and deliberately so: the DOM keeps Share
+            first, which is what a screen reader and the tab ring follow. It
+            is the order they already had, so nothing regresses for them,
+            and the desktop layout below `sm:` reads in DOM order anyway.
+            Flipping the markup instead would have moved the mismatch onto
+            desktop, where side-by-side columns and a keyboard are far more
+            common. */}
+        <section aria-labelledby="transfers-heading" className="order-first flex min-w-0 flex-col gap-4 sm:order-none">
           <h2 id="transfers-heading" className="text-[0.9375rem] font-semibold">Transfers</h2>
           <SaveFolder session={session} />
           <TransferRecord files={session.files} notes={session.notes} onCancel={session.cancelFiles} />
