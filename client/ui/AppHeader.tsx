@@ -50,9 +50,7 @@ export function AppHeader() {
         <a
           href="/"
           onClick={handleHomeClick}
-          // min-h-11: AGENTS.md's 44px mobile tap-target floor, which a bare
-          // 28px logo plus small text would miss.
-          className="neo-press inline-flex min-h-11 items-center gap-2.5 rounded-[var(--radius-md)] px-2.5"
+          className="inline-flex min-h-11 items-center gap-2.5 rounded-[var(--radius-md)] px-2.5"
         >
           {/* Decorative: the wordmark beside it already says the name, and a
               screen reader should hear "Quik Share" once, not twice.
