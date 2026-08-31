@@ -2,6 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { FileMeta } from '../../shared/messages.js';
 import {
   DOWNLOAD_PATH_PREFIX,
+  DOWNLOAD_TOKEN_WAIT_MS,
   buildDownloadHeaders,
   createServiceWorkerSink,
   createStreamRegistry,
@@ -84,20 +85,70 @@ describe('stream registry', () => {
     const writer = writable.getWriter();
     void writer.write(new Uint8Array([1, 2, 3])).then(() => writer.close());
 
-    const entry = registry.take('token-1');
+    const entry = await registry.take('token-1');
     expect(entry?.meta).toEqual(meta);
     expect(await drain(entry!.stream)).toEqual([1, 2, 3]);
   });
 
-  it('returns undefined for an unknown token', () => {
-    expect(createStreamRegistry().take('nope')).toBeUndefined();
+  it('returns undefined for an unknown token', async () => {
+    expect(await createStreamRegistry().take('nope')).toBeUndefined();
   });
 
-  it('consumes a token exactly once', () => {
+  it('consumes a token exactly once', async () => {
     const registry = createStreamRegistry();
     registry.register('t', { meta, stream: new TransformStream<Uint8Array, Uint8Array>().readable });
-    expect(registry.take('t')).toBeDefined();
-    expect(registry.take('t')).toBeUndefined();
+    expect(await registry.take('t')).toBeDefined();
+    expect(await registry.take('t')).toBeUndefined();
+  });
+
+  /*
+   * The lost-transfer race, at the seam where it happens. The page posts its
+   * token and then navigates the download iframe, and nothing orders those
+   * two: the fetch can reach the worker first. Answering "unknown" there
+   * costs the file — the page never gets its acknowledgement, because the
+   * port travelled with the token that was missed — so the request waits.
+   */
+  it('hands over a token that only registers after the request is already waiting', async () => {
+    const registry = createStreamRegistry();
+    const stream = new TransformStream<Uint8Array, Uint8Array>().readable;
+
+    const taken = registry.take('late', 1_000);
+    // Registered a turn later, exactly as the postMessage would land.
+    await Promise.resolve();
+    registry.register('late', { meta, stream });
+
+    expect((await taken)?.stream).toBe(stream);
+  });
+
+  it('still consumes a late token exactly once', async () => {
+    const registry = createStreamRegistry();
+    const taken = registry.take('late', 1_000);
+    registry.register('late', { meta, stream: new TransformStream<Uint8Array, Uint8Array>().readable });
+
+    expect(await taken).toBeDefined();
+    // Nothing was left in the map on the way past the waiting request.
+    expect(await registry.take('late')).toBeUndefined();
+  });
+
+  it('gives up on a token that never arrives, rather than holding the request open', async () => {
+    const registry = createStreamRegistry();
+    expect(await createStreamRegistry().take('never', 10)).toBeUndefined();
+    // And the give-up does not poison the token for a later, valid request.
+    registry.register('later', { meta, stream: new TransformStream<Uint8Array, Uint8Array>().readable });
+    expect(await registry.take('later', 10)).toBeDefined();
+  });
+
+  it('answers a second request for the same token once the first has given up', async () => {
+    const registry = createStreamRegistry();
+    const stream = new TransformStream<Uint8Array, Uint8Array>().readable;
+
+    // A replayed download URL: the first waiter times out, and the second
+    // must still be answerable rather than stranded by the first's cleanup.
+    expect(await registry.take('dup', 10)).toBeUndefined();
+    const second = registry.take('dup', 1_000);
+    registry.register('dup', { meta, stream });
+
+    expect((await second)?.stream).toBe(stream);
   });
 });
 
@@ -420,8 +471,13 @@ describe('service worker', () => {
     return event;
   }
 
-  function response(event: { respondWith: ReturnType<typeof vi.fn> }): Response {
-    return event.respondWith.mock.calls[0]?.[0] as Response;
+  /*
+   * A promise now, not a Response: the handler waits for a token that has not
+   * been registered yet (createStreamRegistry's own comment says why), so it
+   * can only answer asynchronously.
+   */
+  async function response(event: { respondWith: ReturnType<typeof vi.fn> }): Promise<Response> {
+    return await (event.respondWith.mock.calls[0]?.[0] as Promise<Response>);
   }
 
   it('skips waiting and claims open pages so the first transfer is intercepted', () => {
@@ -473,22 +529,56 @@ describe('service worker', () => {
     const writer = writable.getWriter();
     void writer.write(new Uint8Array([7, 8])).then(() => writer.close());
 
-    const served = response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}tok-a`));
+    const served = await response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}tok-a`));
     expect(served.status).toBe(200);
     expect(served.headers.get('Content-Disposition')).toContain('report.pdf');
     expect(served.headers.get('Content-Length')).toBe('10');
     expect([...new Uint8Array(await served.arrayBuffer())]).toEqual([7, 8]);
   });
 
-  it('serves a token exactly once so a replayed request cannot re-read it', () => {
+  it('serves a token exactly once so a replayed request cannot re-read it', async () => {
     const stream = new TransformStream<Uint8Array, Uint8Array>().readable;
     dispatch('message', { data: { t: 'register-download', token: 'tok-b', meta, stream } });
-    expect(response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}tok-b`)).status).toBe(200);
-    expect(response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}tok-b`)).status).toBe(404);
+    expect((await response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}tok-b`))).status).toBe(200);
+    // The replay waits out DOWNLOAD_TOKEN_WAIT_MS before it 404s, which is
+    // the deliberate cost of covering the race below. Faked rather than
+    // waited: five real seconds in a unit suite for a timeout is not worth
+    // the wall clock, and the timer is the whole behaviour being asserted.
+    vi.useFakeTimers();
+    const replay = response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}tok-b`));
+    await vi.advanceTimersByTimeAsync(DOWNLOAD_TOKEN_WAIT_MS);
+    vi.useRealTimers();
+    expect((await replay).status).toBe(404);
   });
 
-  it('404s a token it never held', () => {
-    expect(response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}nope`)).status).toBe(404);
+  it('404s a token it never held, once it has waited for one', async () => {
+    vi.useFakeTimers();
+    const answered = response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}nope`));
+    await vi.advanceTimersByTimeAsync(DOWNLOAD_TOKEN_WAIT_MS);
+    vi.useRealTimers();
+    expect((await answered).status).toBe(404);
+  });
+
+  /*
+   * The lost transfer this wait exists for, at the seam it actually happens
+   * on: the download iframe's fetch reaches the worker BEFORE the page's
+   * `register-download` message does. Answered immediately, that is a 404
+   * into a hidden iframe, no acknowledgement, and a file the receiver fails
+   * with "the download helper did not respond" ten seconds later.
+   */
+  it('holds a download request open for a token that has not been registered yet', async () => {
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = writable.getWriter();
+    void writer.write(new Uint8Array([4, 2])).then(() => writer.close());
+
+    // Fetch first. Message second — the order nothing in the platform
+    // prevents, and the one that used to lose the file.
+    const answered = response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}tok-race`));
+    dispatch('message', { data: { t: 'register-download', token: 'tok-race', meta, stream: readable } });
+
+    const served = await answered;
+    expect(served.status).toBe(200);
+    expect([...new Uint8Array(await served.arrayBuffer())]).toEqual([4, 2]);
   });
 
   it('acknowledges the page only once it is actually serving the download', async () => {
@@ -510,7 +600,7 @@ describe('service worker', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(acked).toBeUndefined();
 
-    expect(response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}tok-ack`)).status).toBe(200);
+    expect((await response(fetchEvent(`${DOWNLOAD_PATH_PREFIX}tok-ack`))).status).toBe(200);
     await served;
     expect(acked).toEqual({ t: 'download-started', token: 'tok-ack' });
     channel.port1.close();

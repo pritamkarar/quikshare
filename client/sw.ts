@@ -1,6 +1,8 @@
 /// <reference lib="webworker" />
 import type { FileMeta } from '../shared/messages.js';
-import { DOWNLOAD_PATH_PREFIX, buildDownloadHeaders, createStreamRegistry } from './save/swstream.js';
+import {
+  DOWNLOAD_PATH_PREFIX, DOWNLOAD_TOKEN_WAIT_MS, buildDownloadHeaders, createStreamRegistry,
+} from './save/swstream.js';
 import { SHARE_LANDING_PATH, SHARE_MISSED_PATH, SHARE_TARGET_PATH, stashShare } from './share/inbox.js';
 
 declare const self: ServiceWorkerGlobalScope;
@@ -92,17 +94,25 @@ self.addEventListener('fetch', (event: FetchEvent) => {
   // Taking the token consumes it, so a reloaded or replayed download URL gets
   // the 404 rather than a stream that has already been read.
   const token = url.pathname.slice(DOWNLOAD_PATH_PREFIX.length);
-  const download = pending.take(token);
-  if (!download) {
-    // Into a hidden iframe, where nobody will see it. The page learns of this
-    // by never being acknowledged: a 404 has no port to answer on, because
-    // whatever lost the token lost the port with it.
-    event.respondWith(new Response('This download has expired.', { status: 404 }));
-    return;
-  }
-  event.respondWith(new Response(download.stream, { headers: buildDownloadHeaders(download.meta) }));
-  // Only now: the response is what consumes the stream, so this is the moment
-  // the page's writes can actually drain. The page waits for this before it
-  // writes anything, since a write with no reader never settles.
-  download.port?.postMessage({ t: 'download-started', token });
+  // Held open for a token that has not arrived yet rather than missed: nothing
+  // orders the page's `register-download` message against this fetch, so a
+  // registry asked the instant this request lands can legitimately not have it
+  // — see createStreamRegistry, which carries the full account.
+  event.respondWith((async () => {
+    const download = await pending.take(token, DOWNLOAD_TOKEN_WAIT_MS);
+    if (!download) {
+      // Into a hidden iframe, where nobody will see it. The page learns of
+      // this by never being acknowledged: a 404 has no port to answer on,
+      // because whatever lost the token lost the port with it.
+      return new Response('This download has expired.', { status: 404 });
+    }
+    // Built before the acknowledgement goes out, and returned immediately
+    // after it: the response is what consumes the stream, and the page starts
+    // writing on that acknowledgement. A write that lands in the microtask
+    // before the browser attaches its reader queues rather than being lost —
+    // it settles as soon as the reader is there.
+    const response = new Response(download.stream, { headers: buildDownloadHeaders(download.meta) });
+    download.port?.postMessage({ t: 'download-started', token });
+    return response;
+  })());
 });

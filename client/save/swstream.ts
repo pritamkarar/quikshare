@@ -55,29 +55,92 @@ export interface PendingDownload {
 
 export interface StreamRegistry {
   register(token: string, download: PendingDownload): void;
-  /** Returns the download and forgets the token, so it is consumable once. */
-  take(token: string): PendingDownload | undefined;
+  /**
+   * Returns the download and forgets the token, so it is consumable once.
+   *
+   * Waits up to `waitMs` for a token that has not been registered yet, rather
+   * than answering "unknown" the instant it is missed — see the registry's
+   * own comment below for why that wait is the difference between a transfer
+   * working and a transfer failing. Resolves undefined once the wait is out.
+   */
+  take(token: string, waitMs?: number): Promise<PendingDownload | undefined>;
 }
 
 /**
  * The downloads the service worker is holding open, keyed by token. Take-once
  * because a `ReadableStream` can only be read once: a replayed request must
  * get a clean 404 rather than a stream someone else already drained.
+ *
+ * `take` waits for a token it does not have yet, and that wait fixes a real
+ * lost transfer. The page registers a token by `postMessage` and then
+ * navigates a hidden iframe at it, but nothing orders those two against each
+ * other (sw.ts's fetch handler says the same from the other side): the fetch
+ * can reach this worker first, and a registry that answered immediately
+ * returned "unknown" for a download that was about to be perfectly valid. The
+ * page then never gets its `download-started` acknowledgement — the port
+ * travelled with the token that was missed — so it fails the file after
+ * DOWNLOAD_START_TIMEOUT_MS with "the download helper did not respond".
+ *
+ * Reproduced roughly one run in five under a loaded machine, and reported in
+ * production as a failed first transfer after a deploy. The window itself is
+ * sub-millisecond — this waits far longer than it needs to, because the cost
+ * of waiting on a genuinely dead token is a hidden iframe getting its 404 a
+ * few seconds later than it used to, and nothing watches that.
+ *
+ * What this deliberately does NOT rescue: a worker terminated *after* it
+ * registered a token. Its registry died with it, the stream with that, and no
+ * amount of waiting brings either back — the page's own timeout still covers
+ * that, and it is not the race above.
  */
 export function createStreamRegistry(): StreamRegistry {
   const pending = new Map<string, PendingDownload>();
+  /** Fetches that arrived before their token did, keyed the same way. */
+  const waiting = new Map<string, (download?: PendingDownload) => void>();
 
   return {
     register(token: string, download: PendingDownload): void {
+      const waiter = waiting.get(token);
+      // Straight to the fetch that is already holding the line, and NOT into
+      // `pending` as well: handing it over is what consumes it.
+      if (waiter) {
+        waiter(download);
+        return;
+      }
       pending.set(token, download);
     },
-    take(token: string): PendingDownload | undefined {
-      const download = pending.get(token);
-      pending.delete(token);
-      return download;
+
+    take(token: string, waitMs = 0): Promise<PendingDownload | undefined> {
+      const ready = pending.get(token);
+      if (ready) {
+        pending.delete(token);
+        return Promise.resolve(ready);
+      }
+      if (waitMs <= 0) return Promise.resolve(undefined);
+
+      return new Promise<PendingDownload | undefined>((resolve) => {
+        const settle = (download?: PendingDownload): void => {
+          clearTimeout(timer);
+          // Only if this waiter is still the one on file. A second fetch for
+          // the same token replaces it, and clearing the map blindly here
+          // would strand that one with no way to be answered.
+          if (waiting.get(token) === settle) waiting.delete(token);
+          resolve(download);
+        };
+        const timer = setTimeout(settle, waitMs);
+        waiting.set(token, settle);
+      });
     },
   };
 }
+
+/**
+ * How long the worker holds a download request open for a token it has not
+ * been given yet. Comfortably longer than the task-ordering window it exists
+ * to cover, and comfortably shorter than DOWNLOAD_START_TIMEOUT_MS — so a
+ * token that really is gone still 404s while the page is listening, and the
+ * page reports it in its own words rather than through a silent stall.
+ */
+export const DOWNLOAD_TOKEN_WAIT_MS = 5_000;
 
 /**
  * Whether this browser can hand a stream to another realm. Safari 15.0–16.3
