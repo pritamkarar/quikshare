@@ -11,14 +11,9 @@ no install, no upload. The two devices talk directly when the network allows
 it, and everything is encrypted before it leaves the browser — the server only
 ever sees ciphertext.
 
-```
-Device A                                        Device B
-  │  opens the app, gets K7M-3QP + a QR            │
-  │ ─────────────── scan or type ───────────────►  │
-  │                                                │
-  │ ◄──────── WebRTC, or relayed if blocked ─────► │
-  │     files · notes · a live camera or screen    │
-```
+<p align="center">
+  <img src="docs/diagram.png" alt="Diagram - Quik Share" />
+</p>
 
 ## How it works
 
