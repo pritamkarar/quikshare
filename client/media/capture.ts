@@ -143,6 +143,21 @@ export async function captureScreen(): Promise<MediaStream> {
 }
 
 /**
+ * Whether this browser can capture a screen at all — false on essentially
+ * every mobile browser, where `getDisplayMedia` simply does not exist (see
+ * `request` below, which is the same check one layer down).
+ *
+ * Offered so the UI can leave the control out rather than present a button
+ * whose only possible outcome on that device is "your browser doesn't
+ * support this". The guard in `request` stays regardless: it is what catches
+ * the Chromium-on-Android case where the method IS defined and fails anyway,
+ * and it is the only thing standing between a caller and a raw TypeError.
+ */
+export function supportsScreenCapture(): boolean {
+  return typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+}
+
+/**
  * `capability` names the one `mediaDevices` method the caller is about to
  * invoke, and the guard checks exactly that method — not just "does
  * `mediaDevices` exist" — because the two calls have different support

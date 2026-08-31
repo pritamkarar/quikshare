@@ -8,6 +8,7 @@ import { LiveSection, TurnCaution, failureText } from '../ui/LiveSection.js';
 import { VerifyPanel } from '../ui/VerifyPanel.js';
 import { SessionHeader } from '../ui/SessionHeader.js';
 import { LiveSession, type Slot } from '../media/live-session.js';
+import { supportsScreenCapture } from '../media/capture.js';
 import { IconCamera, IconDesktop, IconFolder } from '../ui/icons.js';
 import { navigateTo } from '../routing.js';
 import { useTransferGuards } from '../hooks/useTransferGuards.js';
@@ -433,7 +434,15 @@ export function TransferPanel({ session, pending, onPendingSent }: TransferPanel
                   a pair — one filled and one not said they were different
                   kinds of thing, which they are not. */}
               <Button variant="ghost" icon={<IconCamera />} onClick={() => startLive('camera')}>Share camera</Button>
-              <Button variant="ghost" icon={<IconDesktop />} onClick={() => startLive('screen')}>Share screen</Button>
+              {/* Left out entirely where the browser has no getDisplayMedia —
+                  every mobile browser, in practice. Same call as SaveFolder's:
+                  a control whose only possible outcome on this device is "your
+                  browser doesn't support this" is worse than one that was
+                  never offered. Receiving the peer's screen still works here,
+                  which is why only this start button is gated. */}
+              {supportsScreenCapture() && (
+                <Button variant="ghost" icon={<IconDesktop />} onClick={() => startLive('screen')}>Share screen</Button>
+              )}
             </div>
             <p className="text-xs text-[var(--color-text-muted)]">
               Only one live stream at a time. Starting one replaces whatever is already running.

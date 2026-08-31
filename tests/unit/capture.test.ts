@@ -16,7 +16,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CaptureError, captureCamera, captureCameraVideo, captureScreen, countCameras, facingOf,
-  hasTorch, onStreamEnded, setTorch,
+  hasTorch, onStreamEnded, setTorch, supportsScreenCapture,
 } from '../../client/media/capture.js';
 
 /** A minimal MediaStream stand-in: only what capture.ts's callers touch. */
@@ -147,6 +147,28 @@ describe('permission failures', () => {
 
     expect(err).toBeInstanceOf(CaptureError);
     expect((err as CaptureError).failure).toEqual({ reason: 'unsupported' });
+  });
+});
+
+/*
+ * The same fact `request`'s guard enforces, asked BEFORE the call instead of
+ * after it — so the UI can leave the control out rather than hand the user a
+ * button whose only outcome on that device is "unsupported".
+ */
+describe('supportsScreenCapture', () => {
+  it('is false on a camera-capable browser with no getDisplayMedia', () => {
+    stubMediaDevices({ getUserMedia: vi.fn() });
+    expect(supportsScreenCapture()).toBe(false);
+  });
+
+  it('is false in an insecure context, where mediaDevices itself is missing', () => {
+    vi.stubGlobal('navigator', {});
+    expect(supportsScreenCapture()).toBe(false);
+  });
+
+  it('is true once getDisplayMedia is actually there', () => {
+    stubMediaDevices({ getDisplayMedia: vi.fn() });
+    expect(supportsScreenCapture()).toBe(true);
   });
 });
 

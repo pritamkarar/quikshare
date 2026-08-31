@@ -644,6 +644,38 @@ function fakeStream(kinds: Array<'audio' | 'video'>): MediaStream {
  * or LiveSession's own state machine (tests/unit/live-session.test.ts).
  */
 describe('TransferPanel: live media wiring', () => {
+  /*
+   * jsdom implements no `navigator.mediaDevices` at all, which is the exact
+   * shape of a browser that cannot capture a screen — so without this stub
+   * every test below would render the mobile layout (no Share screen button)
+   * while claiming to describe the desktop one. Stubbed rather than mocked
+   * away because the gate reads the real property, one layer down in
+   * capture.ts's `supportsScreenCapture`.
+   */
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getDisplayMedia: vi.fn() },
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(navigator, 'mediaDevices', { value: undefined, configurable: true });
+  });
+
+  it('hides Share screen where the browser cannot capture one, rather than offering a button that can only fail', () => {
+    // Every mobile browser: `getUserMedia` present (the camera works),
+    // `getDisplayMedia` absent. Receiving the peer's screen is unaffected —
+    // only this device's own start control goes.
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia: vi.fn() },
+      configurable: true,
+    });
+    render(<TransferPanel session={fakeSession()} />);
+    expect(screen.queryByRole('button', { name: /share screen/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /share camera/i })).toBeEnabled();
+  });
+
   it('builds LiveSession with the session\'s real peerId, never a default', () => {
     render(<TransferPanel session={fakeSession({ peerId: 'b' })} />);
     expect(currentLiveSession().peerId).toBe('b');

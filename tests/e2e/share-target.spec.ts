@@ -63,7 +63,12 @@ test('a file shared from the OS sends itself once both devices confirm the numbe
 
     // Nobody chose a file on either screen. Confirming the number is the only
     // thing that happened, and the share sent itself.
-    await expect(guest.getByText('holiday.txt')).toBeVisible({ timeout: 30_000 });
+    // `exact`, or this races TransferRecord's sr-only completion status
+    // ("holiday.txt finished. 2 items.", TransferRecord.tsx) — a substring
+    // match resolves to both it and the row, which is a strict-mode
+    // violation whenever the poll lands after the file finishes rather than
+    // before. Under parallel workers it usually does.
+    await expect(guest.getByText('holiday.txt', { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(guest.getByText('https://example.invalid/holiday')).toBeVisible();
   } finally {
     await hostContext.close();
