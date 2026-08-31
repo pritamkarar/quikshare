@@ -556,10 +556,12 @@ describe('TransferPanel', () => {
    * — it is what makes the confirm below come for free.
    */
   it('offers an explicit way to end the session, which routes home', async () => {
-    const pushState = vi.spyOn(history, 'pushState');
+    // Home replaces rather than pushes, so Back does not return to the
+    // session that was just ended -- see `leaveTo`.
+    const replaceState = vi.spyOn(history, 'replaceState');
     render(<TransferPanel session={fakeSession()} />);
     await userEvent.click(screen.getByRole('button', { name: /end session/i }));
-    expect(pushState).toHaveBeenCalledWith(null, '', '/');
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/');
   });
 
   it('ends without a prompt when nothing is in flight', async () => {
@@ -602,23 +604,23 @@ describe('TransferPanel: leaving mid-transfer', () => {
    */
   it('confirms before End session cancels a live transfer, and obeys a refusal', async () => {
     const confirmed = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const pushState = vi.spyOn(history, 'pushState');
+    const replaceState = vi.spyOn(history, 'replaceState');
     render(<TransferPanel session={fakeSession({ files: [tracked()] })} />);
 
     await userEvent.click(screen.getByRole('button', { name: /end session/i }));
 
     expect(confirmed).toHaveBeenCalled();
-    expect(pushState).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it('ends the session once the user accepts losing the transfer', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const pushState = vi.spyOn(history, 'pushState');
+    const replaceState = vi.spyOn(history, 'replaceState');
     render(<TransferPanel session={fakeSession({ files: [tracked()] })} />);
 
     await userEvent.click(screen.getByRole('button', { name: /end session/i }));
 
-    expect(pushState).toHaveBeenCalledWith(null, '', '/');
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/');
   });
 
   it('navigates once the user accepts losing the transfer', async () => {

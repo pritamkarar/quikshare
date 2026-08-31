@@ -10,11 +10,14 @@ afterEach(() => {
 });
 
 describe('AppHeader', () => {
+  // `replaceState`, not `pushState`: going home replaces the entry it leaves
+  // rather than stacking one on top of it, so Back cannot walk into the
+  // session the user just left (see `leaveTo`).
   it('links the product name home without a full page load', async () => {
-    const pushState = vi.spyOn(history, 'pushState');
+    const replaceState = vi.spyOn(history, 'replaceState');
     render(<AppHeader />);
     await userEvent.click(screen.getByRole('link', { name: /quik share/i }));
-    expect(pushState).toHaveBeenCalledWith(null, '', '/');
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/');
   });
 
   /*
@@ -23,13 +26,13 @@ describe('AppHeader', () => {
    * when the browser is being asked to open a new tab.
    */
   it('leaves a modified click to the browser', () => {
-    const pushState = vi.spyOn(history, 'pushState');
+    const replaceState = vi.spyOn(history, 'replaceState');
     render(<AppHeader />);
     // fireEvent rather than userEvent: a held modifier in userEvent's
     // keyboard state does not reach a separately-issued click, so the flag
     // has to be put on the event itself for the handler to see it.
     fireEvent.click(screen.getByRole('link', { name: /quik share/i }), { metaKey: true });
-    expect(pushState).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
   });
 
   it('points at the repository, in a new tab, and says so', () => {

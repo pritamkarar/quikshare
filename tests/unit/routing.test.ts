@@ -82,6 +82,24 @@ describe('navigateTo', () => {
     expect(pushState).toHaveBeenCalledWith(null, '', '/join');
   });
 
+  /*
+   * The one behaviour that keeps Back out of a session that is over: '/'
+   * overwrites the entry it is leaving instead of stacking on top of it, so
+   * there is no '/s/:code' behind the landing page to walk back into.
+   */
+  it('replaces the current entry when going home, rather than stacking one', () => {
+    const pushState = vi.spyOn(history, 'pushState');
+    const replaceState = vi.spyOn(history, 'replaceState');
+    history.pushState(null, '', '/s/K7M3QP');
+    pushState.mockClear();
+
+    navigateTo('/');
+
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/');
+    expect(pushState).not.toHaveBeenCalled();
+    expect(location.pathname).toBe('/');
+  });
+
   it('dispatches a popstate event so a listening App re-renders on the new route', () => {
     const onPopState = vi.fn();
     addEventListener('popstate', onPopState);

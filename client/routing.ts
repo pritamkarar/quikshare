@@ -92,7 +92,20 @@ export function navigateTo(path: string, before?: () => Promise<void>): void {
  * running" in front of someone whose transfer has already stopped.
  */
 export function leaveTo(path: string): void {
-  history.pushState(null, '', path);
+  /*
+   * The landing page replaces the current entry instead of stacking a new
+   * one, so Back does not walk straight back into the session that was just
+   * left. A '/s/:code' entry left in the stack is a link to a room that is
+   * over — pressing Back on it re-mounts SessionScreen, opens a worker and a
+   * socket, and lands the user on "the other device left" for a session they
+   * deliberately ended. Replacing is the only thing the History API offers
+   * here: nothing can clear the stack outright.
+   *
+   * Only '/'. Every other navigation is somewhere the user chose to go
+   * (`/new`, `/join`, a session) and Back should still undo it.
+   */
+  if (path === '/') history.replaceState(null, '', path);
+  else history.pushState(null, '', path);
   dispatchEvent(new PopStateEvent('popstate'));
 }
 
