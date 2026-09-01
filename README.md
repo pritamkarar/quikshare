@@ -6,10 +6,11 @@
   <a href="https://quikshare.qd.je"><strong>quikshare.qd.je</strong></a>
 </p>
 
-Move a file from one device to another with a link and a QR code. No account,
-no install, no upload. The two devices talk directly when the network allows
-it, and everything is encrypted before it leaves the browser — the server only
-ever sees ciphertext.
+Move a file — or a note, or a live view of your camera or screen — from one
+device to another with a link and a QR code. No account, no install, no
+upload. The two devices talk directly when the network allows it, and
+everything is encrypted before it leaves the browser — the server only ever
+sees ciphertext.
 
 <p align="center">
   <img src="docs/diagram.png" alt="Diagram - Quik Share" />
@@ -61,6 +62,20 @@ can reorder, drop, duplicate and splice frames, so:
   Both peers share one key, so a repeated nonce would leak the authentication
   key itself.
 
+**Files, notes, and whatever is already on the clipboard.** Drop files, type
+a note, or press ⌘/Ctrl+V — a screenshot goes straight from the clipboard to
+the other device instead of being saved, hunted down in a picker and deleted
+again. Everything that crosses the session lands in one record, sent and
+received in one ordering, filterable (`?filter=sent` survives a reload),
+cancellable per file, and virtualized past the row count a dropped folder
+reaches easily. While a transfer is in flight the tab holds a wake lock, the
+percentage rides in `document.title` for a tab nobody is looking at, and
+leaving the screen asks first — there is no resume, so leaving really does
+cancel. One notification fires when the last file of a batch lands, only if
+the tab is hidden and the permission was already granted; it is asked for
+from the act of sending, which is the first honest sign someone intends to
+wait for something.
+
 **Saving, in three tiers,** picked per browser and advertised to the peer in
 the handshake so the *sender* can warn about a file that will not fit before a
 multi-gigabyte transfer starts: a service-worker stream straight to the
@@ -70,16 +85,58 @@ API as a fallback, and an in-memory blob as the floor.
 **Chunking and encryption run in a Web Worker,** so the UI never re-renders
 per chunk.
 
-**Each side can see what it paired with.** The session screen shows a card
-per device — type, browser, OS, screen size, a device id that stays stable for
-that browser profile, and the IP address the relay observed — so "did I just
-pair with my own laptop?" has an answer. The address is the one thing a
-browser cannot know about itself, so the relay tells each device its own; the
-two then swap descriptions in a *sealed* control frame, never on the plaintext
-handshake, so the relay does not get the pairing handed to it in the clear.
-What the other side reports is its own claim: it is sanitised on arrival
-(`shared/device.ts`) but nothing about it is verified, and nothing is
-authorised by it.
+**Live camera and screen ride a second connection** (`client/media/`). It is
+its own `RTCPeerConnection`, one-way by construction — the offerer's
+transceivers `sendonly`, the answerer's `recvonly` — and deliberately kept
+out of the worker that owns file transfer, which must never see an
+`RTCPeerConnection`. A live failure closes that one connection and says so on
+its own card; it is never reported as a transfer error, and files in flight
+are untouched.
+
+- Offer, answer and ICE candidates travel as sealed control frames on the
+  session that already exists, and every field is whitelisted before it
+  reaches `setRemoteDescription`/`addIceCandidate` (`shared/media-signal.ts`).
+  The peer holds the same key, so *authenticated* is not *trusted*: an SDP is
+  bounded, candidates are counted, and nothing is cast through.
+- One slot per session. Starting a stream replaces whatever is running, and
+  two peers grabbing it in the same instant is resolved by glare rules rather
+  than left to race. Seven paths end a stream and all seven funnel through
+  one release, which is what actually stops the local tracks — the step that
+  makes the camera light go out.
+- A screen share says what to protect when the path narrows: **Text** keeps
+  resolution (a soft caption is unreadable, a late slide is merely late),
+  **Motion** keeps frame rate, and **Data** is the one preset with hard caps
+  (`client/media/share-quality.ts`). All three steer the browser's own
+  congestion control rather than running a second controller against it.
+- Camera shares get mute, flip and torch — each read off the live *track*
+  after every flip rather than remembered from what was asked for, because
+  the same phone reports a lamp on one camera and none on the other.
+- This is the only path that uses TURN, fetched from `/turn` lazily on the
+  first share attempt of a session and never while idle. A deployment with no
+  TURN is fully supported: it degrades to STUN and the UI cautions once. There
+  is no relay fallback for media — if WebRTC cannot connect, the share does
+  not happen.
+- Nothing is recorded, anywhere.
+
+The screen-share button is left out entirely where the browser has no
+`getDisplayMedia` — every mobile browser, in practice. Receiving the other
+device's screen still works there.
+
+**Each side can see what it paired with.** The session header draws the pair
+itself — a glyph and an OS per device, with the run between them solid when
+the transport is direct and broken around a relay node when it is not, saying
+in shape what the badge beside it says in words — so "did I just pair with my
+own laptop?" has an answer without scrolling. The two devices swap their
+descriptions in a *sealed* control frame, never on the plaintext handshake, so
+the relay does not get the pairing handed to it in the clear; the IP address
+is the one thing a browser cannot know about itself, so the relay tells each
+device its own. What the other side reports is its own claim: it is sanitised
+on arrival (`shared/device.ts`) but nothing about it is verified, and nothing
+is authorised by it. The fuller per-device card — browser, screen size, a
+device id stable for that browser profile, the observed address — is still
+`client/ui/DevicePanel.tsx`, no longer mounted on the session screen: it sat
+below the transfer record, which is the last place anyone looks during a
+transfer, and the header answers the question it was there for.
 
 **The server stores nothing.** In-memory rooms, no database, no object
 storage, and the file bytes are never written to disk or logged.
@@ -97,8 +154,8 @@ silently.
 
 - Node **≥ 22**
 - A modern browser. HTTPS is mandatory in any deployment — the QR scanner,
-  WebRTC, and the streaming save tier all require a secure context, and
-  browsers only waive that for `localhost`.
+  WebRTC, camera and screen capture, and the streaming save tier all require a
+  secure context, and browsers only waive that for `localhost`.
 
 ## Development
 
@@ -166,10 +223,21 @@ app before running. It transfers a real 3 MB file between two contexts and
 compares the bytes on disk, then runs the accessibility suite — focus-ring
 visibility, sticky overlap, a keyboard-only walkthrough, and tap-target floors
 at desktop and mobile widths — each with a companion test proving the check is
-not vacuous.
+not vacuous. Four more suites cover what only a browser can answer:
+`live-media.spec.ts` negotiates a real camera stream between two contexts (on
+its own Chromium instance, because the fake-device flags are launch-time) and
+checks the file connection survives it; `session-layout.spec.ts` checks the
+grid breakpoint, the record's own scroll, and the filter surviving a reload;
+and `share-target.spec.ts` posts the manifest's share form the way Chrome's
+share sheet does. The fourth, `direct-transport.spec.ts`, earns the paragraph
+below.
 
-One of those e2e tests exists for a specific reason: `direct-transport.spec.ts`
-asserts the transport badge actually reaches **Direct** on the default path.
+Screen capture is not covered end to end and that is an environment gap, not
+an untested path: `getDisplayMedia` headlessly needs a desktop to capture, and
+a CI runner has none.
+
+It exists for a specific reason: it asserts the transport badge actually
+reaches **Direct** on the default path.
 `Session` runs in a Web Worker and `RTCPeerConnection` is `[Exposed=Window]`,
 so an upgrade guard that asks its own realm silently disables WebRTC
 everywhere — which is exactly what the guard did from the moment it was
@@ -181,28 +249,34 @@ the difference.
 ## Layout
 
 ```
-shared/          wire types, room codes, signal parsing, device info — both sides
+shared/          wire types, room codes, signal parsing, device info, media signals
 server/
   index.ts       Fastify: static assets, /ws upgrade, /s/:code, /turn, rate limits
+  dev.ts         the relay on its own, for `npm run dev:server`
   rooms.ts       Map<code, Room>; pairing and idle sweep
   rate-limit.ts  token buckets keyed by client IP
   turn.ts        TURN config validation and REST credential minting
 client/
   crypto.ts      AES-GCM primitives, nonce construction, base64url
-  device.ts      what this browser can say about itself, for the device panel
+  device.ts      what this browser can say about itself
   protocol.ts    13-byte frame header, encode/decode
   session.ts     pairing, reconnect, transport upgrade, resume
+  routing.ts     the routes, the navigation guard, the record's filter param
   transfer/      Sender, Receiver, and the data-frame AAD both share
   transport/     relay, webrtc, the switchable seam, memory (tests)
+  media/         live camera and screen: capture, its own peer, ICE, quality, stats
   save/          the three save tiers and the capability probe
-  worker/        the Web Worker boundary and its sink proxy
+  share/         the OS share sheet's inbox
+  worker/        the Web Worker boundary, its sink proxy and its peer proxy
+  hooks/         useSession, the QR scanner, the in-flight transfer guards
   screens/ ui/   React screens and hand-rolled Tailwind primitives
-  public/        favicon and touch icon, emitted to the origin root
+  sw.ts          service worker: streaming downloads, and the share target
+  public/        icons, manifest, robots and sitemap, emitted to the origin root
 scripts/
   make-icons.py  draws the PNG app icons from the mark's own geometry
 docs/
   deployment.md  what an operator needs
-  superpowers/   design spec and implementation plans
+  diagram.png    the diagram at the top of this file
 docker-compose.yml  relay + a hardened coturn, for deployments that want TURN
 ```
 
@@ -218,13 +292,19 @@ The banner at the top of this file is still the older raster artwork
 
 ## Limits
 
-Deliberate, and recorded in the spec's deferred list rather than forgotten:
+Deliberate, and worth stating rather than discovering:
 
 - **Both devices must be online at once.** No store-and-forward.
 - **Two devices per room.** A third gets `full`.
 - **Rooms live in one process's memory,** so both peers must reach the same
   instance. Sticky sessions reduce mismatches but do not eliminate them; the
   durable fix is Redis pub/sub keyed by room code.
+- **One live stream per session,** and starting one replaces whatever is
+  running.
+- **Live media needs WebRTC.** The file path falls back to the relay when a
+  direct connection fails; a camera or screen share does not, and says so.
+- **Screen sharing is desktop-only,** because `getDisplayMedia` is. Watching
+  someone else's screen works everywhere.
 - **No accounts, no history, nothing persists** past the session. That is the
   product, not a missing feature.
 

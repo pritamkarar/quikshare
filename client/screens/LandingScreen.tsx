@@ -77,7 +77,7 @@ const POINTS: Point[] = [
   {
     icon: IconDesktop,
     title: 'Know both devices',
-    body: 'Each side shows its type, browser and screen size, which is enough to confirm you reached the right one.',
+    body: 'Every session shows what is on each end — phone or computer, and which system it runs — so you can confirm you reached the right one.',
     span: 'lg:col-span-3',
   },
 ];
