@@ -1,313 +1,632 @@
+# Quik Share
+
 <p align="center">
   <img src="logo-banner.png" alt="Quik Share" width="620" />
 </p>
 
 <p align="center">
-  <a href="https://quikshare.qd.je"><strong>quikshare.qd.je</strong></a>
+  <strong>Private device-to-device sharing, right from your browser.</strong>
 </p>
-
-Move a file — or a note, or a live view of your camera or screen — from one
-device to another with a link and a QR code. No account, no install, no
-upload. The two devices talk directly when the network allows it, and
-everything is encrypted before it leaves the browser — the server only ever
-sees ciphertext.
 
 <p align="center">
-  <img src="docs/diagram.png" alt="Diagram - Quik Share" />
+  Transfer files, notes, screenshots, camera and screen between devices.<br>
+  No account. No installation. No cloud upload.
 </p>
 
-## How it works
+<p align="center">
+  <a href="https://quikshare.qd.je"><strong>🚀 Try Quik Share</strong></a>
+  &nbsp; · &nbsp;
+  <a href="#self-hosting"><strong>Self-host</strong></a>
+  &nbsp; · &nbsp;
+  <a href="#security"><strong>Security</strong></a>
+</p>
 
-**Pairing.** One device asks the relay for a room and gets a six-character
-code (`shared/codes.ts` — Crockford base32, so `I`/`L`/`O` normalise to `1`/`1`/`0`
-and cannot be misread aloud). The share link is `/s/K7M3QP` — the code is the
-whole of it. The other device scans the QR, types the six characters, or
-pastes the link, and the room is full at two peers.
+<p align="center">
 
-**The key is agreed between the devices, and you check it yourself.** Each
-device generates an ephemeral P-256 pair and puts its public key in the hello
-frame; both sides run ECDH and HKDF (salted with the room code) to reach the
-same 32-byte AES-GCM key, which the relay never sees (`client/crypto.ts`,
-`deriveSession`). The relay *can* try to sit in the middle by swapping both
-public keys — so the same secret also derives a six-digit number, both screens
-show it, and nothing sends until the people at both ends confirm the numbers
-match. Under a machine-in-the-middle the two numbers differ, because the
-attacker shares a different secret with each device.
+![License](https://img.shields.io/github/license/pritamkarar/quikshare)
+![GitHub stars](https://img.shields.io/github/stars/pritamkarar/quikshare)
+![GitHub issues](https://img.shields.io/github/issues/pritamkarar/quikshare)
+![Node](https://img.shields.io/badge/node-%3E%3D22-339933)
+![WebRTC](https://img.shields.io/badge/WebRTC-supported-blue)
 
-This replaced an earlier design that carried the key in the URL fragment. That
-kept the key off the wire without anyone having to check anything, but it made
-the link the only way in: 43 characters of base64 after a `#`, unreadable
-aloud and untypeable, and a chat client that truncated at the `#` produced a
-link that could not open the session at all.
+</p>
 
-**Two transports, one seam.** Every transfer starts on the WebSocket relay,
-which always works, then tries to upgrade to a direct WebRTC data channel
-(STUN only — no TURN, by design; the relay already covers the networks TURN
-would rescue). The badge on the session screen says **Direct** or **Relayed**
-so the user knows which one carried their file. `client/transport/upgrade.ts`
-swaps the live transport underneath `Sender`/`Receiver`, which never learn it
-happened.
+---
 
-**The relay is treated as an active adversary,** not just a passive pipe. It
-can reorder, drop, duplicate and splice frames, so:
+## What is Quik Share?
 
-- Each 13-byte frame header is authenticated as AES-GCM additional data, not
-  merely transmitted.
-- Data frames additionally bind the chunk's own byte offset
-  (`client/transfer/data-aad.ts`), which the receiver *derives* from its
-  running byte count rather than reads off the wire. A chunk sealed for one
-  offset cannot open at another — contiguity is enforced by the cipher.
-- Nonces are `[peerByte][random prefix][sequence]`, and the sequence counter is
-  session-wide and never restarts, across reconnects and transport swaps.
-  Both peers share one key, so a repeated nonce would leak the authentication
-  key itself.
+**Quik Share is an open-source, privacy-focused alternative to cloud-based file sharing.**
 
-**Files, notes, and whatever is already on the clipboard.** Drop files, type
-a note, or press ⌘/Ctrl+V — a screenshot goes straight from the clipboard to
-the other device instead of being saved, hunted down in a picker and deleted
-again. Everything that crosses the session lands in one record, sent and
-received in one ordering, filterable (`?filter=sent` survives a reload),
-cancellable per file, and virtualized past the row count a dropped folder
-reaches easily. While a transfer is in flight the tab holds a wake lock, the
-percentage rides in `document.title` for a tab nobody is looking at, and
-leaving the screen asks first — there is no resume, so leaving really does
-cancel. One notification fires when the last file of a batch lands, only if
-the tab is hidden and the permission was already granted; it is asked for
-from the act of sending, which is the first honest sign someone intends to
-wait for something.
+Open Quik Share on two devices, pair them with a QR code or short code, and start sharing.
 
-**Saving, in three tiers,** picked per browser and advertised to the peer in
-the handshake so the *sender* can warn about a file that will not fit before a
-multi-gigabyte transfer starts: a service-worker stream straight to the
-browser's downloader (no size limit, no user gesture), the File System Access
-API as a fallback, and an in-memory blob as the floor.
+When possible, data travels **directly between the two devices using WebRTC**. If a direct connection cannot be established, Quik Share can fall back to an encrypted WebSocket relay.
 
-**Chunking and encryption run in a Web Worker,** so the UI never re-renders
-per chunk.
+The relay does not receive your plaintext files.
 
-**Live camera and screen ride a second connection** (`client/media/`). It is
-its own `RTCPeerConnection`, one-way by construction — the offerer's
-transceivers `sendonly`, the answerer's `recvonly` — and deliberately kept
-out of the worker that owns file transfer, which must never see an
-`RTCPeerConnection`. A live failure closes that one connection and says so on
-its own card; it is never reported as a transfer error, and files in flight
-are untouched.
+```text
+                 ┌─────────────────────┐
+                 │     Quik Share      │
+                 │   encrypted relay   │
+                 └──────────┬──────────┘
+                            │
+                  signaling / fallback
+                            │
+             ┌──────────────┴──────────────┐
+             │                             │
+        ┌────▼────┐                   ┌────▼────┐
+        │ Device A│◄──── WebRTC ─────►│ Device B│
+        └─────────┘      when possible └─────────┘
+```
 
-- Offer, answer and ICE candidates travel as sealed control frames on the
-  session that already exists, and every field is whitelisted before it
-  reaches `setRemoteDescription`/`addIceCandidate` (`shared/media-signal.ts`).
-  The peer holds the same key, so *authenticated* is not *trusted*: an SDP is
-  bounded, candidates are counted, and nothing is cast through.
-- One slot per session. Starting a stream replaces whatever is running, and
-  two peers grabbing it in the same instant is resolved by glare rules rather
-  than left to race. Seven paths end a stream and all seven funnel through
-  one release, which is what actually stops the local tracks — the step that
-  makes the camera light go out.
-- A screen share says what to protect when the path narrows: **Text** keeps
-  resolution (a soft caption is unreadable, a late slide is merely late),
-  **Motion** keeps frame rate, and **Data** is the one preset with hard caps
-  (`client/media/share-quality.ts`). All three steer the browser's own
-  congestion control rather than running a second controller against it.
-- Camera shares get mute, flip and torch — each read off the live *track*
-  after every flip rather than remembered from what was asked for, because
-  the same phone reports a lamp on one camera and none on the other.
-- This is the only path that uses TURN, fetched from `/turn` lazily on the
-  first share attempt of a session and never while idle. A deployment with no
-  TURN is fully supported: it degrades to STUN and the UI cautions once. There
-  is no relay fallback for media — if WebRTC cannot connect, the share does
-  not happen.
-- Nothing is recorded, anywhere.
+### No account
 
-The screen-share button is left out entirely where the browser has no
-`getDisplayMedia` — every mobile browser, in practice. Receiving the other
-device's screen still works there.
+Just open the website.
 
-**Each side can see what it paired with.** The session header draws the pair
-itself — a glyph and an OS per device, with the run between them solid when
-the transport is direct and broken around a relay node when it is not, saying
-in shape what the badge beside it says in words — so "did I just pair with my
-own laptop?" has an answer without scrolling. The two devices swap their
-descriptions in a *sealed* control frame, never on the plaintext handshake, so
-the relay does not get the pairing handed to it in the clear; the IP address
-is the one thing a browser cannot know about itself, so the relay tells each
-device its own. What the other side reports is its own claim: it is sanitised
-on arrival (`shared/device.ts`) but nothing about it is verified, and nothing
-is authorised by it. The fuller per-device card — browser, screen size, a
-device id stable for that browser profile, the observed address — is still
-`client/ui/DevicePanel.tsx`, no longer mounted on the session screen: it sat
-below the transfer record, which is the last place anyone looks during a
-transfer, and the header answers the question it was there for.
+### No installation
 
-**The server stores nothing.** In-memory rooms, no database, no object
-storage, and the file bytes are never written to disk or logged.
+Everything works in a modern browser. Installing the PWA is optional.
 
-**Installing is optional, and adds one thing.** The app is a PWA, so a
-browser will offer to install it. Installed, it joins the OS share sheet:
-share a photo or a link from any app and Quik Share opens with it already
-staged, sending as soon as both devices have confirmed the number. The share
-never touches the network — the service worker takes the files out of the
-POST body before the navigation discards them, which is also why a share
-made before the app has ever been opened says so rather than failing
-silently.
+### No cloud storage
+
+Files are not uploaded to object storage or saved by the relay.
+
+### End-to-end encrypted
+
+Content is encrypted in the browser before it leaves the device.
+
+### Works across devices
+
+Use it between phones, laptops, tablets and desktops without requiring the same operating system.
+
+### Open source
+
+Inspect the code, self-host the service, or contribute improvements.
+
+---
+
+## 🚀 Try it
+
+**[Open Quik Share →](https://quikshare.qd.je)**
+
+1. Open Quik Share on both devices.
+2. One device creates a sharing session.
+3. Scan the QR code, type the short code, or open the sharing link.
+4. Confirm that both devices display the same verification number.
+5. Start sharing.
+
+That's it.
+
+---
+
+## What can you share?
+
+| Feature               | Description                                                     |
+| --------------------- | --------------------------------------------------------------- |
+| 📁 **Files**          | Transfer files and folders between devices                      |
+| 📝 **Notes**          | Send text without another messaging service                     |
+| 📋 **Clipboard**      | Paste screenshots or clipboard content directly into a session  |
+| 📷 **Camera**         | Share a live camera stream                                      |
+| 🖥️ **Screen**        | Share your screen with another device                           |
+| 📱 **PWA**            | Optionally install Quik Share and use the OS share sheet        |
+| 🔐 **Encryption**     | Content is encrypted before leaving the browser                 |
+| 🌐 **WebRTC**         | Direct peer-to-peer transport when available                    |
+| 🔄 **Relay fallback** | Encrypted WebSocket transport when direct WebRTC cannot connect |
+
+---
+
+# Why Quik Share?
+
+Traditional file-sharing services often require you to:
+
+* upload your file to a server
+* wait for the upload
+* generate a link
+* share the link
+* download the file again
+* trust a third party with your data
+
+Quik Share takes a different approach.
+
+```text
+Traditional
+
+Phone
+  │
+  ▼
+Cloud upload
+  │
+  ▼
+Server
+  │
+  ▼
+Download
+  │
+  ▼
+Laptop
+
+
+Quik Share
+
+Phone
+  │
+  ├──────────── encrypted ────────────┐
+  │                                   │
+  ▼                                   ▼
+Device A  ◄────── WebRTC ───────►  Device B
+```
+
+When direct WebRTC is available, the relay is not carrying the file data at all.
+
+When direct connectivity is unavailable, Quik Share can use its encrypted relay path so that transfers can still work.
+
+---
+
+# 🔐 Security
+
+Security is part of the design rather than something added after the fact.
+
+## End-to-end encryption
+
+Each device generates an ephemeral **P-256** key pair.
+
+The public keys are exchanged through the authenticated session and both devices derive the same session key using:
+
+* ECDH
+* HKDF
+* AES-256-GCM
+
+The relay never receives the derived encryption key.
+
+Content is encrypted in the browser before it is transmitted.
+
+---
+
+## Man-in-the-middle verification
+
+A relay could theoretically attempt to replace public keys during pairing.
+
+To address this, Quik Share derives a **six-digit verification number** from the shared secret.
+
+Both devices display the number.
+
+```text
+Device A                         Device B
+
+   482913   ◄────────────────►   482913
+
+              ✓ Match
+```
+
+If an attacker establishes different secrets with the two devices, the numbers will not match.
+
+The users should only continue when the displayed numbers agree.
+
+---
+
+## The relay is treated as an adversary
+
+The protocol does not assume that the relay is a trusted transport.
+
+Frames are authenticated using AES-GCM.
+
+Frame headers are authenticated as additional authenticated data, and transfer data binds its byte offset into the authenticated data.
+
+This means an intermediary cannot simply modify, reorder, duplicate or splice encrypted frames without detection.
+
+---
+
+## No file storage
+
+The server is designed as a **stateless relay**.
+
+It does not use:
+
+* a database
+* object storage
+* permanent file storage
+
+File bytes are not intentionally written to disk or logged by the relay.
+
+Rooms exist in memory and disappear when the session ends or expires.
+
+---
+
+# 🌐 Transport architecture
+
+Quik Share uses two transport layers for file transfer.
+
+### 1. WebSocket relay
+
+The initial connection uses the WebSocket relay.
+
+This provides a reliable baseline even when direct peer-to-peer connectivity is unavailable.
+
+### 2. WebRTC
+
+After pairing, Quik Share attempts to upgrade the file connection to a direct WebRTC data channel.
+
+```text
+                 Pair
+                  │
+                  ▼
+             WebSocket
+                  │
+                  ▼
+          Try WebRTC upgrade
+             /          \
+            /            \
+       Success           Failure
+          │                 │
+          ▼                 ▼
+       Direct            Relayed
+       WebRTC           WebSocket
+```
+
+The UI explicitly shows whether the current transfer is **Direct** or **Relayed**.
+
+The file-transfer layer does not need to know which transport is currently underneath it.
+
+---
+
+# 📷 Camera & screen sharing
+
+Live media uses a separate WebRTC connection from file transfer.
+
+This keeps media failures isolated from file transfers already in progress.
+
+### Camera
+
+Depending on browser capabilities, camera sharing supports:
+
+* mute
+* camera switching
+* torch control where available
+
+### Screen
+
+Screen sharing supports different quality priorities:
+
+* **Text** — prioritize readable content
+* **Motion** — prioritize frame rate
+* **Data** — prioritize bandwidth efficiency
+
+Nothing is recorded.
+
+Live media exists only for the duration of the session.
+
+> Browser support for camera and screen capture varies by platform. HTTPS is required.
+
+---
+
+# 📦 Large file transfers
+
+Quik Share is designed to handle files beyond the size where creating a giant in-memory Blob is practical.
+
+Transfers are:
+
+* chunked
+* encrypted
+* processed in a Web Worker
+* streamed to the browser's available saving mechanism
+
+The application selects an appropriate saving strategy based on browser capabilities.
+
+This allows large transfers without forcing the entire file through the UI thread.
+
+---
+
+# 📋 Clipboard sharing
+
+Have a screenshot on your clipboard?
+
+Just press:
+
+```text
+Ctrl + V
+```
+
+or:
+
+```text
+⌘ + V
+```
+
+Quik Share can send clipboard content directly through the active session.
+
+No need to:
+
+1. save the screenshot
+2. find the file
+3. open a file picker
+4. upload it
+5. delete it afterwards
+
+---
+
+# 📱 Progressive Web App
+
+Quik Share is a PWA.
+
+Installation is optional.
+
+On supported platforms, installing Quik Share also allows it to participate in the operating system's share sheet.
+
+For example:
+
+```text
+Gallery
+   │
+   │ Share
+   ▼
+Quik Share
+   │
+   ▼
+Choose paired device
+   │
+   ▼
+Transfer
+```
+
+---
+
+# 🛠️ Self-hosting
+
+Quik Share is designed to be self-hostable.
+
+The server is a small stateless relay with a static client bundle.
 
 ## Requirements
 
-- Node **≥ 22**
-- A modern browser. HTTPS is mandatory in any deployment — the QR scanner,
-  WebRTC, camera and screen capture, and the streaming save tier all require a
-  secure context, and browsers only waive that for `localhost`.
+* Node.js **22+**
+* A modern browser
+* HTTPS in production
 
-## Development
+HTTPS is required because browser APIs used by Quik Share—including camera access, screen capture, WebRTC and service workers—require a secure context.
+
+---
+
+## Quick start
+
+Clone the repository:
+
+```bash
+git clone https://github.com/pritamkarar/quikshare.git
+cd quikshare
+```
+
+Install dependencies:
 
 ```bash
 npm install
-
-npm run dev:server    # Fastify relay on http://127.0.0.1:8787
-npm run dev:client    # Vite on http://localhost:5173, proxying /ws to the relay
 ```
 
-Open two browser windows on the Vite URL to test a transfer against yourself.
-
-To test against a real phone you need HTTPS — `localhost` is a secure context
-but your phone cannot reach it. Use a tunnel, or `mkcert` plus `vite --https`
-(the certificate must be trusted on the phone too). See
-[`docs/deployment.md`](docs/deployment.md).
-
-**Debug flag:** append `?forceTransport=relay` to suppress the WebRTC upgrade
-and pin the relay path deterministically. Without it the fallback only runs on
-networks where WebRTC happens to fail — which is how a fallback rots silently
-until a user hits it in a hotel.
-
-## Production
+Start the development server:
 
 ```bash
-npm run build         # vite build + tsc -p tsconfig.server.json → dist/
-npm start             # NODE_ENV=production node dist/server/index.js
+npm run dev:server
 ```
 
-Or with the included container:
+In another terminal:
+
+```bash
+npm run dev:client
+```
+
+Then open the Vite URL in two browser windows.
+
+---
+
+# 🐳 Docker
+
+Build the image:
 
 ```bash
 docker build -t quik-share .
+```
+
+Run it:
+
+```bash
 docker run --rm -p 8787:8787 quik-share
 ```
 
-Put a TLS-terminating reverse proxy in front of it and set `TRUST_PROXY`
-correctly, or the per-IP rate limits collapse into one shared bucket.
-[`docs/deployment.md`](docs/deployment.md) has the Caddy and nginx configs and
-explains the trust model.
+For a complete production deployment—including reverse proxy and optional TURN configuration—see:
 
-| Variable         | Default   | Purpose |
-| ---------------- | --------- | ------- |
-| `PORT`           | `8787`    | Relay port. Rejects a malformed value at startup rather than binding something random. |
-| `HOST`           | `0.0.0.0` | Bind address. |
-| `NODE_ENV`       | —         | `production` serves the built client and its SPA fallback. |
-| `TRUST_PROXY`    | unset     | Which hop may speak for `X-Forwarded-For`. `true` = a proxy on this host; an IP/CIDR list = a proxy elsewhere (**a container is this case**); unset = trust nobody. A bare hop count is rejected. |
-| `VITE_STUN_URLS` | public    | STUN servers, baked in at **build** time. Container builds pass it as `--build-arg`. |
-| `TURN_URLS`      | unset     | `turn:` servers for live media's ICE fallback (file transfer never uses TURN). The address the **browser** dials, so it names a host reachable from the public internet, never a container name or `localhost` on a real deployment. Unset is fully supported — `GET /turn` just returns no servers. Must be set together with `TURN_SECRET`. `turns:` is accepted too, but only works against a provider that terminates TLS; the bundled coturn has no certificate. |
-| `TURN_USERNAME`  | unset     | With `TURN_CREDENTIAL`, a long-lived pair from a managed TURN provider (Metered and friends), forwarded to the browser as-is. The alternative to `TURN_SECRET`, not a companion to it — setting both is a startup error. |
-| `TURN_CREDENTIAL`| unset     | The password half of the pair above. Unlike `TURN_SECRET` this one does leave the process, because the browser is what authenticates with it. Rotate it in the provider's dashboard. |
-| `TURN_SECRET`    | unset     | Shared secret with the coturn `static-auth-secret`, which `docker-compose.yml` reads from a `coturn/turnserver.conf` you create rather than passing on coturn's command line (`docs/deployment.md` explains why). Must be set together with `TURN_URLS`; a stray value from an unrelated service will block startup. |
-| `TURN_TTL_SECONDS` | `600`   | Lifetime of a minted TURN credential, 1–3600. See `docs/deployment.md` before changing it — `/turn` is unauthenticated and this is one of the bounds on that. |
+**[`docs/deployment.md`](docs/deployment.md)**
 
-## Testing
+---
+
+# 🧪 Testing
+
+Quik Share includes unit, UI, integration and end-to-end tests.
+
+Run the test suite:
 
 ```bash
-npm test              # vitest — unit, UI (jsdom), and integration
-npm run typecheck     # tsc --noEmit
-npm run test:e2e      # Playwright, real Chromium, two browser contexts
+npm test
 ```
 
-`npm run test:e2e` needs `npx playwright install chromium` once, and builds the
-app before running. It transfers a real 3 MB file between two contexts and
-compares the bytes on disk, then runs the accessibility suite — focus-ring
-visibility, sticky overlap, a keyboard-only walkthrough, and tap-target floors
-at desktop and mobile widths — each with a companion test proving the check is
-not vacuous. Four more suites cover what only a browser can answer:
-`live-media.spec.ts` negotiates a real camera stream between two contexts (on
-its own Chromium instance, because the fake-device flags are launch-time) and
-checks the file connection survives it; `session-layout.spec.ts` checks the
-grid breakpoint, the record's own scroll, and the filter surviving a reload;
-and `share-target.spec.ts` posts the manifest's share form the way Chrome's
-share sheet does. The fourth, `direct-transport.spec.ts`, earns the paragraph
-below.
+Type-check:
 
-Screen capture is not covered end to end and that is an environment gap, not
-an untested path: `getDisplayMedia` headlessly needs a desktop to capture, and
-a CI runner has none.
-
-It exists for a specific reason: it asserts the transport badge actually
-reaches **Direct** on the default path.
-`Session` runs in a Web Worker and `RTCPeerConnection` is `[Exposed=Window]`,
-so an upgrade guard that asks its own realm silently disables WebRTC
-everywhere — which is exactly what the guard did from the moment it was
-written, undetected until this test existed. Unit tests stub
-`RTCPeerConnection` into a realm that has one, which proves the negotiation
-algorithm and nothing about availability. Only a real browser can tell you
-the difference.
-
-## Layout
-
+```bash
+npm run typecheck
 ```
-shared/          wire types, room codes, signal parsing, device info, media signals
+
+Run browser end-to-end tests:
+
+```bash
+npm run test:e2e
+```
+
+The browser tests cover real two-peer scenarios including file transfer and WebRTC transport behavior.
+
+The project also includes accessibility testing for keyboard navigation, focus visibility, mobile layouts and other UI behavior.
+
+---
+
+# 🏗️ Architecture
+
+```text
+shared/
+├── wire types
+├── room codes
+├── signal parsing
+├── device information
+└── media signals
+
 server/
-  index.ts       Fastify: static assets, /ws upgrade, /s/:code, /turn, rate limits
-  dev.ts         the relay on its own, for `npm run dev:server`
-  rooms.ts       Map<code, Room>; pairing and idle sweep
-  rate-limit.ts  token buckets keyed by client IP
-  turn.ts        TURN config validation and REST credential minting
+├── Fastify server
+├── WebSocket relay
+├── room management
+├── rate limiting
+└── TURN credential handling
+
 client/
-  crypto.ts      AES-GCM primitives, nonce construction, base64url
-  device.ts      what this browser can say about itself
-  protocol.ts    13-byte frame header, encode/decode
-  session.ts     pairing, reconnect, transport upgrade, resume
-  routing.ts     the routes, the navigation guard, the record's filter param
-  transfer/      Sender, Receiver, and the data-frame AAD both share
-  transport/     relay, webrtc, the switchable seam, memory (tests)
-  media/         live camera and screen: capture, its own peer, ICE, quality, stats
-  save/          the three save tiers and the capability probe
-  share/         the OS share sheet's inbox
-  worker/        the Web Worker boundary, its sink proxy and its peer proxy
-  hooks/         useSession, the QR scanner, the in-flight transfer guards
-  screens/ ui/   React screens and hand-rolled Tailwind primitives
-  sw.ts          service worker: streaming downloads, and the share target
-  public/        icons, manifest, robots and sitemap, emitted to the origin root
-scripts/
-  make-icons.py  draws the PNG app icons from the mark's own geometry
-docs/
-  deployment.md  what an operator needs
-  diagram.png    the diagram at the top of this file
-docker-compose.yml  relay + a hardened coturn, for deployments that want TURN
+├── crypto/
+├── session/
+├── transfer/
+├── transport/
+│   ├── relay
+│   └── WebRTC
+├── media/
+├── save/
+├── share/
+├── worker/
+├── hooks/
+├── UI
+└── service worker
 ```
 
-The mark is two QR finder patterns offset along the diagonal, and it exists in
-three files that must agree: `client/ui/Logo.tsx` (the header, inline SVG in
-theme tokens), `client/public/favicon.svg` (the tab), and the PNG fallbacks
-that `python3 scripts/make-icons.py` draws from the same proportions. Change
-the geometry in the script's constants, run it, and mirror the change in the
-two SVGs.
+The important architectural boundary is:
 
-The banner at the top of this file is still the older raster artwork
-(`logo.png`); it is not used anywhere in the app.
+```text
+             ┌──────────────────────┐
+             │    Transfer layer    │
+             └──────────┬───────────┘
+                        │
+                 transport seam
+                        │
+              ┌─────────┴─────────┐
+              │                   │
+         WebSocket             WebRTC
+           relay                direct
+```
 
-## Limits
+The transfer implementation does not need to care whether its encrypted frames are currently travelling through WebSocket or WebRTC.
 
-Deliberate, and worth stating rather than discovering:
+---
 
-- **Both devices must be online at once.** No store-and-forward.
-- **Two devices per room.** A third gets `full`.
-- **Rooms live in one process's memory,** so both peers must reach the same
-  instance. Sticky sessions reduce mismatches but do not eliminate them; the
-  durable fix is Redis pub/sub keyed by room code.
-- **One live stream per session,** and starting one replaces whatever is
-  running.
-- **Live media needs WebRTC.** The file path falls back to the relay when a
-  direct connection fails; a camera or screen share does not, and says so.
-- **Screen sharing is desktop-only,** because `getDisplayMedia` is. Watching
-  someone else's screen works everywhere.
-- **No accounts, no history, nothing persists** past the session. That is the
-  product, not a missing feature.
+# 🔍 Debugging transport
 
-## License
+To force the relay transport during development:
 
-[MIT](LICENSE) © Pritam Karar
+```text
+?forceTransport=relay
+```
+
+For example:
+
+```text
+http://localhost:5173/s/K7M3QP?forceTransport=relay
+```
+
+This is useful for testing the fallback path deterministically.
+
+---
+
+# ⚙️ Configuration
+
+Important production variables include:
+
+| Variable           | Purpose                                             |
+| ------------------ | --------------------------------------------------- |
+| `PORT`             | Server listening port                               |
+| `HOST`             | Server bind address                                 |
+| `NODE_ENV`         | Production/development mode                         |
+| `TRUST_PROXY`      | Trusted proxy configuration for client IP detection |
+| `VITE_STUN_URLS`   | STUN servers baked into the client at build time    |
+| `TURN_URLS`        | TURN servers for live media                         |
+| `TURN_USERNAME`    | Managed TURN credential username                    |
+| `TURN_CREDENTIAL`  | Managed TURN credential password                    |
+| `TURN_SECRET`      | Shared secret for self-hosted coturn                |
+| `TURN_TTL_SECONDS` | Lifetime of generated TURN credentials              |
+
+See **[`docs/deployment.md`](docs/deployment.md)** for the complete configuration and deployment model.
+
+---
+
+# 🤝 Contributing
+
+Contributions are welcome.
+
+If you find a bug, have an idea, or want to improve the implementation:
+
+1. Fork the repository.
+2. Create a branch.
+3. Make your change.
+4. Run the tests.
+5. Open a pull request.
+
+Before submitting:
+
+```bash
+npm test
+npm run typecheck
+npm run test:e2e
+```
+
+If you're planning a larger change, opening an issue first is encouraged.
+
+---
+
+# 🗺️ Roadmap
+
+The roadmap is intentionally driven by real-world use rather than adding features for the sake of features.
+
+Areas of interest include:
+
+* [ ] Improved mobile browser support
+* [ ] More browser compatibility testing
+* [ ] Better transfer recovery/resume behavior
+* [ ] Additional deployment examples
+* [ ] More self-hosting documentation
+* [ ] Improved discovery and pairing UX
+* [ ] More accessibility improvements
+* [ ] Community-contributed integrations
+
+Have an idea?
+
+**[Open an issue →](https://github.com/pritamkarar/quikshare/issues)**
+
+---
+
+# 📜 License
+
+Quik Share is released under the **MIT License**.
+
+See [`LICENSE`](LICENSE).
+
+---
+
+# ⭐ Support the project
+
+If Quik Share is useful to you:
+
+* ⭐ **Star the repository**
+* 🐛 Report bugs
+* 💡 Suggest improvements
+* 🧑‍💻 Contribute code
+* 📖 Improve the documentation
+* 🗣️ Tell someone who might use it
+
+**[⭐ Star Quik Share on GitHub](https://github.com/pritamkarar/quikshare)**
+
+---
+
+<p align="center">
+  <strong>Share directly. Keep control.</strong>
+</p>
+
+<p align="center">
+  <a href="https://quikshare.qd.je">quikshare.qd.je</a>
+</p>
