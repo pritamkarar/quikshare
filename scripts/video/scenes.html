@@ -1,0 +1,329 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Quik Share — video scenes</title>
+<!--
+  Every frame of the product video that is not the running app.
+
+  Three scenes, chosen with ?scene=: the opening hook, the closing card, and
+  the chrome that frames the real footage (two rounded windows punched out of
+  an opaque sheet, plus the caption band under them). One file rather than
+  three because all of them share the app's tokens, and a promo card whose
+  porcelain drifts from the app's porcelain is exactly the kind of seam that
+  makes a cut look cheap.
+
+  Geometry is NOT defined here. make-video.mjs owns it and passes it in, so
+  the holes in the chrome cannot drift from where ffmpeg actually places the
+  two panes.
+
+  Animation is seekable, never wall-clock: make-video.mjs calls seek(ms) and
+  screenshots, so a slow render produces the same frames as a fast one. Every
+  animation therefore needs `both` fill, or it would snap back to its
+  unstyled state the moment its own delay window closed.
+-->
+<style>
+  @font-face {
+    font-family: 'Geist';
+    src: url('../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2') format('woff2-variations');
+    font-weight: 100 900;
+  }
+  @font-face {
+    font-family: 'Geist Mono';
+    src: url('../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2') format('woff2-variations');
+    font-weight: 100 900;
+  }
+
+  /* Straight from client/styles/tokens.css — the video and the app are the
+     same sheet of material, so the cut into real footage is invisible. */
+  :root {
+    --bg: #ebe9e4;
+    --surface-2: #e0ddd5;
+    --text: #1c1a17;
+    --muted: #6b665c;
+    --accent: #2b50e2;
+    --success: #0c7346;
+    --neo-light: #ffffff;
+    --neo-dark: #c5c0b5;
+    --rim: rgb(255 255 255 / 76%);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 1920px; height: 1080px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Geist', system-ui, sans-serif;
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* The chrome scene is an overlay: it must composite onto the footage, so
+     everything the sheet does not explicitly paint has to stay transparent.
+     BOTH elements, not just body — html paints the ground as well, and a
+     porcelain documentElement sits behind the punched windows and fills them
+     straight back in. */
+  html.transparent, body.transparent { background: transparent; }
+
+  .stage { position: relative; width: 1920px; height: 1080px; }
+
+  /* The soft-UI extrusion, as one reusable pair of opposed shadows. */
+  .neo { box-shadow: -10px -10px 24px var(--neo-light), 12px 12px 28px var(--neo-dark); }
+  .neo-sm { box-shadow: -5px -5px 12px var(--neo-light), 6px 6px 14px var(--neo-dark); }
+
+  /* ---------- shared motion ---------- */
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(28px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes popIn {
+    0%   { opacity: 0; transform: scale(0.86); }
+    60%  { opacity: 1; transform: scale(1.03); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes drawLine { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+  /* ---------- scene: hook ---------- */
+  .hook {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 26px; text-align: center;
+  }
+  .hook-line {
+    font-size: 92px; font-weight: 620; letter-spacing: -0.035em; line-height: 1.06;
+    animation: riseIn 900ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  .hook-line.two { animation-delay: 620ms; }
+  .hook-sub {
+    font-size: 46px; font-weight: 450; color: var(--muted); letter-spacing: -0.015em;
+    animation: riseIn 900ms cubic-bezier(.2,.8,.2,1) 1250ms both;
+  }
+  .hook-em { color: var(--accent); }
+  /* The whole hook clears out so the brand card is not competing with it. */
+  .hook-group { animation: fadeOut 420ms ease-in 2600ms both; }
+
+  .brand {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 30px;
+    animation: fadeIn 520ms ease-out 2900ms both;
+  }
+  .brand-row { display: flex; align-items: center; gap: 30px; }
+  .brand-logo {
+    width: 132px; height: 132px;
+    animation: popIn 760ms cubic-bezier(.2,.8,.2,1) 2980ms both;
+  }
+  .brand-name {
+    font-size: 104px; font-weight: 640; letter-spacing: -0.04em;
+    animation: riseIn 760ms cubic-bezier(.2,.8,.2,1) 3080ms both;
+  }
+  .brand-sub {
+    font-size: 40px; font-weight: 450; color: var(--muted); letter-spacing: -0.012em;
+    animation: riseIn 760ms cubic-bezier(.2,.8,.2,1) 3260ms both;
+  }
+  .brand-rule {
+    width: 320px; height: 3px; background: var(--accent); border-radius: 2px;
+    transform-origin: center;
+    animation: drawLine 700ms cubic-bezier(.2,.8,.2,1) 3400ms both;
+  }
+
+  /* ---------- scene: chrome (overlays the real footage) ---------- */
+  .label {
+    position: absolute;
+    font-size: 25px; font-weight: 560; letter-spacing: -0.01em; color: var(--muted);
+    display: flex; align-items: center; gap: 11px;
+  }
+  .label-dot {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--accent); display: inline-block;
+  }
+
+  .caption {
+    position: absolute; left: 0; right: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .caption-title {
+    font-size: 42px; font-weight: 600; letter-spacing: -0.028em; color: var(--text);
+    text-align: center;
+  }
+  .caption-sub {
+    font-size: 26px; font-weight: 450; color: var(--muted); letter-spacing: -0.01em;
+    text-align: center;
+  }
+  .caption-title .em { color: var(--accent); }
+
+  /* ---------- scene: outro ---------- */
+  .outro {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 34px;
+  }
+  .outro-logo {
+    width: 108px; height: 108px;
+    animation: popIn 700ms cubic-bezier(.2,.8,.2,1) 60ms both;
+  }
+  .outro-title {
+    font-size: 84px; font-weight: 640; letter-spacing: -0.04em;
+    animation: riseIn 760ms cubic-bezier(.2,.8,.2,1) 200ms both;
+  }
+  .chips { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; max-width: 900px; }
+  .chip {
+    background: var(--bg); border-radius: 999px;
+    padding: 20px 34px; font-size: 30px; font-weight: 520; letter-spacing: -0.012em;
+    display: flex; align-items: center; gap: 14px;
+    animation: riseIn 640ms cubic-bezier(.2,.8,.2,1) both;
+  }
+  .chip svg { width: 27px; height: 27px; flex: none; }
+  .chip:nth-child(1) { animation-delay: 620ms; }
+  .chip:nth-child(2) { animation-delay: 760ms; }
+  .chip:nth-child(3) { animation-delay: 900ms; }
+  .chip:nth-child(4) { animation-delay: 1040ms; }
+
+  .cta {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    animation: riseIn 760ms cubic-bezier(.2,.8,.2,1) 1340ms both;
+  }
+  .cta-url {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 58px; font-weight: 560; letter-spacing: -0.02em; color: var(--accent);
+  }
+  .cta-repo {
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    font-size: 27px; font-weight: 450; color: var(--muted);
+  }
+</style>
+
+<body>
+<div class="stage" id="stage"></div>
+
+<script type="module">
+  const q = new URLSearchParams(location.search);
+  const geo = JSON.parse(q.get('geo') ?? '{}');
+  const stage = document.getElementById('stage');
+
+  const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  /* `*text*` marks the one phrase per caption that carries the accent. Kept
+     to a single mark deliberately: two accented phrases in a 46px line and
+     neither reads as emphasis. */
+  const em = (s) => esc(s).replace(/\*([^*]+)\*/g, '<span class="em">$1</span>');
+
+  const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#0c7346" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+  function hook() {
+    document.body.innerHTML = `
+      <div class="stage">
+        <div class="hook-group">
+          <div class="hook">
+            <div class="hook-line">Your laptop and your phone</div>
+            <div class="hook-line two">are <span class="hook-em">30 centimetres</span> apart.</div>
+            <div class="hook-sub">So why does the file travel 3,000 kilometres?</div>
+          </div>
+        </div>
+        <div class="brand">
+          <div class="brand-row">
+            <img class="brand-logo" src="../../logo.png" alt="">
+            <div class="brand-name">Quik Share</div>
+          </div>
+          <div class="brand-rule"></div>
+          <div class="brand-sub">Private device-to-device sharing, right in your browser.</div>
+        </div>
+      </div>`;
+  }
+
+  function outro() {
+    document.body.innerHTML = `
+      <div class="stage">
+        <div class="outro">
+          <img class="outro-logo" src="../../logo.png" alt="">
+          <div class="outro-title">Quik Share</div>
+          <div class="chips">
+            <div class="chip neo-sm">${CHECK}No account, no install</div>
+            <div class="chip neo-sm">${CHECK}End-to-end encrypted</div>
+            <div class="chip neo-sm">${CHECK}Direct device-to-device</div>
+            <div class="chip neo-sm">${CHECK}Open source, MIT</div>
+          </div>
+          <div class="cta">
+            <div class="cta-url">quikshare.qd.je</div>
+            <div class="cta-repo">github.com/pritamkarar/quikshare</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  /*
+   * The frame around the real footage.
+   *
+   * An opaque porcelain sheet with two rounded windows cut out of it, so the
+   * recorded panes show through and everything else on the 1920x1080 canvas
+   * is ours to label. evenodd is what does the cutting: the outer rect and
+   * the two rounded rects are one path, so the inner shapes subtract.
+   *
+   * Drawn as an overlay (body is transparent) because ffmpeg composites this
+   * PNG on top of the two videos rather than the other way round — the
+   * alternative would be masking two video streams into rounded corners in
+   * the filtergraph, which is a great deal of filter for a rounded corner.
+   */
+  function chrome() {
+    document.documentElement.classList.add('transparent');
+    document.body.classList.add('transparent');
+    const { paneW, paneH, leftX, rightX, paneY, radius: r } = geo;
+
+    /* One rounded rectangle, exactly where ffmpeg puts that pane — no
+       inflation. Written out longhand rather than as an SVG <rect> because
+       these have to be sub-paths of the SAME path as the full-frame rect for
+       evenodd to subtract them. */
+    const win = (x) => [
+      `M${x + r} ${paneY}`,
+      `h${paneW - 2 * r}`, `a${r} ${r} 0 0 1 ${r} ${r}`,
+      `v${paneH - 2 * r}`, `a${r} ${r} 0 0 1 -${r} ${r}`,
+      `h-${paneW - 2 * r}`, `a${r} ${r} 0 0 1 -${r} -${r}`,
+      `v-${paneH - 2 * r}`, `a${r} ${r} 0 0 1 ${r} -${r}`, 'z',
+    ].join(' ');
+
+    const title = q.get('title') ?? '';
+    const sub = q.get('sub') ?? '';
+    const leftLabel = q.get('left') ?? 'Device A';
+    const rightLabel = q.get('right') ?? 'Device B';
+    const captionTop = paneY + paneH + 20;
+
+    document.body.innerHTML = `
+      <div class="stage">
+        <svg width="1920" height="1080" style="position:absolute;inset:0">
+          <path fill="#ebe9e4" fill-rule="evenodd"
+                d="M0 0 h1920 v1080 h-1920 z ${win(leftX)} ${win(rightX)}"/>
+          <rect x="${leftX}" y="${paneY}" width="${paneW}" height="${paneH}"
+                rx="${r}" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2"/>
+          <rect x="${rightX}" y="${paneY}" width="${paneW}" height="${paneH}"
+                rx="${r}" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2"/>
+        </svg>
+        <div class="label" style="left:${leftX}px;top:${paneY - 38}px">
+          <span class="label-dot"></span>${esc(leftLabel)}
+        </div>
+        <div class="label" style="left:${rightX}px;top:${paneY - 38}px">
+          <span class="label-dot"></span>${esc(rightLabel)}
+        </div>
+        <div class="caption" style="top:${captionTop}px">
+          <div class="caption-title">${em(title)}</div>
+          ${sub ? `<div class="caption-sub">${esc(sub)}</div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  ({ hook, outro, chrome }[q.get('scene') ?? 'hook'])();
+
+  /*
+   * Deterministic seek. CSS animations are real Animation objects, and their
+   * local time already accounts for animation-delay, so one currentTime for
+   * all of them is exactly "the page, t milliseconds after load" — with none
+   * of the dropped frames a wall-clock screen recording would introduce.
+   */
+  window.seek = (ms) => {
+    for (const a of document.getAnimations()) { a.pause(); a.currentTime = ms; }
+  };
+  window.seek(0);
+  await document.fonts.ready;
+  window.__ready = true;
+</script>

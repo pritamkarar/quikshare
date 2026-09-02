@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "video": "node scripts/video/make-video.mjs"
   },
   "dependencies": {
     "@fastify/static": "^8.0.0",
