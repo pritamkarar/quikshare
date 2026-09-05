@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DropZone } from '../../client/ui/DropZone.js';
@@ -106,6 +106,50 @@ describe('DropZone', () => {
     Object.defineProperty(event, 'dataTransfer', { value: { files: [file], items: [] } });
     zone.dispatchEvent(event);
     expect(onFiles).toHaveBeenCalled();
+  });
+
+  /*
+   * One input, two modes. The e2e suites find the picker as the page's only
+   * `input[type="file"]`, so the folder button cannot bring a second one;
+   * it flips `webkitdirectory` on the same input instead, and the files
+   * button flips it back, so the mode is chosen per click, not left behind.
+   */
+  it('offers a folder picker through the same input', async () => {
+    const { container } = render(<DropZone onFiles={vi.fn()} />);
+    const input = container.querySelector('input[type="file"]')!;
+    await userEvent.click(screen.getByRole('button', { name: /choose folder/i }));
+    expect(input).toHaveAttribute('webkitdirectory');
+    await userEvent.click(screen.getByRole('button', { name: /choose files/i }));
+    expect(input).not.toHaveAttribute('webkitdirectory');
+  });
+
+  it('expands a dropped folder into its files', async () => {
+    const onFiles = vi.fn();
+    const { container } = render(<DropZone onFiles={onFiles} />);
+    const nested = new File(['y'], 'nested.txt', { type: 'text/plain' });
+    const loose = new File(['x'], 'loose.txt', { type: 'text/plain' });
+    const fileEntry = { isFile: true, isDirectory: false, file: (ok: (file: File) => void) => ok(nested) };
+    // Read twice, the way Chrome batches: the entries, then an empty batch
+    // that says there are no more.
+    const batches: unknown[][] = [[fileEntry], []];
+    const dirEntry = {
+      isFile: false,
+      isDirectory: true,
+      createReader: () => ({ readEntries: (ok: (entries: unknown[]) => void) => ok(batches.shift()!) }),
+    };
+    const items = [
+      { webkitGetAsEntry: () => dirEntry, getAsFile: () => null },
+      { webkitGetAsEntry: () => ({ isFile: true, isDirectory: false }), getAsFile: () => loose },
+    ];
+    const event = new Event('drop', { bubbles: true }) as Event & { dataTransfer: unknown };
+    // `files` carries the folder as a bogus zero-byte File the way Chrome
+    // does; the zone must read the entries instead of trusting it.
+    const folderAsFile = new File([], 'photos', { type: '' });
+    Object.defineProperty(event, 'dataTransfer', { value: { files: [folderAsFile, loose], items } });
+    container.querySelector('[data-dropzone]')!.dispatchEvent(event);
+
+    await waitFor(() => expect(onFiles).toHaveBeenCalledTimes(1));
+    expect(onFiles.mock.calls[0]![0].map((file: File) => file.name)).toEqual(['loose.txt', 'nested.txt']);
   });
 });
 
@@ -482,7 +526,9 @@ function fakeSession(over: Partial<SessionHandle> = {}): SessionHandle {
 describe('TransferPanel', () => {
   it('offers no folder control on a browser that cannot hand one over', () => {
     render(<TransferPanel session={fakeSession()} />);
-    expect(screen.queryByRole('button', { name: /folder/i })).not.toBeInTheDocument();
+    // The SAVE folder, by its own labels: DropZone's "Choose folder" is a
+    // different control, on the sending side, and is always offered.
+    expect(screen.queryByRole('button', { name: /save to a folder|change folder/i })).not.toBeInTheDocument();
   });
 
   it('asks for a folder once, and then says where files are landing', async () => {

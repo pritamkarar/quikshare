@@ -120,3 +120,26 @@ export async function takeShare(storage: CacheStorage): Promise<SharedPayload | 
   await storage.delete(SHARE_CACHE);
   return { files, note: index.note };
 }
+
+/**
+ * The same handoff for files chosen on the landing page, without the Cache.
+ *
+ * Nothing survives here but a tab: dropping on '/' and creating on '/new'
+ * are two renders of one document, so the Files can simply be held in
+ * memory — no copy, which matters for the multi-gigabyte drop the product
+ * promises to take. One slot, not a queue, for the same reason
+ * routing.ts's guard is one slot: exactly one session is about to be
+ * created, and a reload loses the drop the way it loses any unsent send.
+ */
+let local: SharedPayload | undefined;
+
+export function stashLocal(payload: SharedPayload): void {
+  local = payload;
+}
+
+/** Hands over the held payload and clears the slot, mirroring `takeShare`. */
+export function takeLocal(): SharedPayload | undefined {
+  const payload = local;
+  local = undefined;
+  return payload;
+}

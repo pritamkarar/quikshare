@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TransferPanel } from '../../client/screens/TransferPanel.js';
 import { CreateScreen } from '../../client/screens/CreateScreen.js';
-import { takeShare } from '../../client/share/inbox.js';
+import { stashLocal, takeLocal, takeShare } from '../../client/share/inbox.js';
 import { installFakeWorker } from './fake-worker.js';
 import type { SessionHandle } from '../../client/hooks/useSession.js';
 import type { LiveSessionEvents } from '../../client/media/live-session.js';
@@ -247,5 +247,31 @@ describe('landing from the share sheet', () => {
     render(<CreateScreen />);
 
     expect(takeShare).not.toHaveBeenCalled();
+  });
+});
+
+describe('landing from the front page drop zone', () => {
+  beforeEach(() => {
+    installFakeWorker();
+    vi.mocked(takeShare).mockReset();
+  });
+
+  it('claims the held files and says what is waiting', async () => {
+    history.replaceState(null, '', '/new');
+    stashLocal({
+      files: [
+        new File(['a'], 'one.jpg', { type: 'image/jpeg' }),
+        new File(['b'], 'two.jpg', { type: 'image/jpeg' }),
+      ],
+      note: undefined,
+    });
+
+    render(<CreateScreen />);
+
+    expect(await screen.findByText(/2 files ready/i)).toBeInTheDocument();
+    // Held in memory, never in the Cache: the share path is not consulted.
+    expect(takeShare).not.toHaveBeenCalled();
+    // And taken, so a remount of this screen cannot read as a second drop.
+    expect(takeLocal()).toBeUndefined();
   });
 });

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LandingScreen } from '../../client/screens/LandingScreen.js';
+import { takeLocal } from '../../client/share/inbox.js';
 
 afterEach(() => {
   cleanup();
@@ -55,16 +56,33 @@ describe('LandingScreen', () => {
   });
 
   /*
-   * Claims the page can no longer honestly make. Dropping a folder does
-   * nothing — DropZone reads `dataTransfer.files` and its input carries no
-   * `webkitdirectory` — and the device cards stopped rendering an address.
-   * Both sentences survived the features that invalidated them, which is
-   * exactly the drift a list of nice words about a product accumulates.
+   * A claim the page can no longer honestly make: the device cards stopped
+   * rendering an address, and the sentence survived the change that
+   * invalidated it, which is exactly the drift a list of nice words about a
+   * product accumulates. A "folders" clause used to sit beside this one for
+   * the same reason; DropZone walks directory entries now, so it went.
    */
   it('does not claim what the app cannot do', () => {
     const { container } = render(<LandingScreen />);
-    expect(container.textContent).not.toMatch(/folders/i);
     expect(container.textContent).not.toMatch(/connecting address/i);
+  });
+
+  /*
+   * The third way in. Dropping on '/' must not start a session here — that
+   * is CreateScreen's job, behind its own route — but it must carry the
+   * files there: the in-memory slot beside the share-target inbox is what
+   * CreateScreen reads on mount.
+   */
+  it('stages dropped files and heads to /new with them', () => {
+    const pushState = vi.spyOn(history, 'pushState');
+    const { container } = render(<LandingScreen />);
+    const file = new File(['x'], 'a.txt', { type: 'text/plain' });
+    const event = new Event('drop', { bubbles: true }) as Event & { dataTransfer: unknown };
+    Object.defineProperty(event, 'dataTransfer', { value: { files: [file], items: [] } });
+    container.querySelector('[data-dropzone]')!.dispatchEvent(event);
+
+    expect(pushState).toHaveBeenCalledWith(null, '', '/new');
+    expect(takeLocal()?.files.map((held) => held.name)).toEqual(['a.txt']);
   });
 
   /*

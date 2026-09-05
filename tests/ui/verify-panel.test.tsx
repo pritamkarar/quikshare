@@ -148,7 +148,7 @@ describe('TransferPanel: the verification gate', () => {
     // Including the folder picker, which lives in the Transfers column and
     // is the one control this costs: it was worth offering before any file
     // could arrive. Named here so its absence reads as the decision it is.
-    expect(screen.queryByRole('button', { name: /folder/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save to a folder|change folder/i })).not.toBeInTheDocument();
 
     rerender(
       <TransferPanel
@@ -158,7 +158,7 @@ describe('TransferPanel: the verification gate', () => {
     for (const name of [/share/i, /transfers/i]) {
       expect(screen.getByRole('region', { name })).toBeInTheDocument();
     }
-    expect(screen.getByRole('button', { name: /folder/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save to a folder|change folder/i })).toBeInTheDocument();
   });
 
   /*

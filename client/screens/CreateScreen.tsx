@@ -7,7 +7,7 @@ import { JoinLink } from '../ui/JoinLink.js';
 import { InvalidScreen } from './InvalidScreen.js';
 import { TransferPanel } from './TransferPanel.js';
 import { IconCheck, IconCopy } from '../ui/icons.js';
-import { SHARE_FLAG, takeShare, type SharedPayload } from '../share/inbox.js';
+import { SHARE_FLAG, takeLocal, takeShare, type SharedPayload } from '../share/inbox.js';
 
 /** How long the copy button stays confirmed before returning to its label. */
 const COPIED_MS = 2000;
@@ -95,6 +95,12 @@ export function CreateScreen({ onRestart }: CreateScreenProps) {
    * look like a second share of files that have already been taken.
    */
   useEffect(() => {
+    // Files dropped on the landing page a moment ago, held in memory rather
+    // than in the Cache. Checked first: it needs no flag and no storage, and
+    // the two cannot both be waiting for one mount.
+    const dropped = takeLocal();
+    if (dropped !== undefined) { setPending(dropped); return; }
+
     const flag = new URL(location.href).searchParams.get(SHARE_FLAG);
     if (flag === null) return;
     history.replaceState(null, '', '/new');

@@ -1,6 +1,8 @@
 import type { ComponentType, ReactNode } from 'react';
 import { navigateTo } from '../routing.js';
+import { stashLocal } from '../share/inbox.js';
 import { Button } from '../ui/Button.js';
+import { DropZone } from '../ui/DropZone.js';
 import { HeroArt } from '../ui/HeroArt.js';
 import {
   IconCamera, IconClock, IconDesktop, IconDirect, IconExpand, IconKey, IconLink,
@@ -169,6 +171,29 @@ export function LandingScreen() {
             <Button variant="ghost" icon={<IconLink />} className="sm:min-w-44" onClick={() => navigateTo('/join')}>
               Join a session
             </Button>
+          </div>
+
+          {/* The third way in: drop what you want to send and the session
+              starts with it. The files ride the same in-memory handoff the
+              OS share sheet's Cache uses (client/share/inbox.ts), so
+              CreateScreen shows them as "ready" and TransferPanel sends
+              them the moment both users confirm the number — dropping here
+              is the instruction to send, the way choosing Quik Share in a
+              share sheet is. Below the buttons, never above: the fold
+              argument in the paragraph's comment applies to those first. */}
+          <p className="flex w-full max-w-md items-center gap-3 text-xs uppercase tracking-wider text-[var(--color-text-muted)]">
+            <span aria-hidden="true" className="h-px flex-1 bg-[var(--color-border-strong)] opacity-60" />
+            or
+            <span aria-hidden="true" className="h-px flex-1 bg-[var(--color-border-strong)] opacity-60" />
+          </p>
+          <div className="w-full max-w-md">
+            <DropZone
+              hint="Drop files or a folder here to start a session with them"
+              onFiles={(files) => {
+                stashLocal({ files, note: undefined });
+                navigateTo('/new');
+              }}
+            />
           </div>
         </div>
 
