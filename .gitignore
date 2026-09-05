@@ -18,3 +18,5 @@ playwright/.cache/
 .worktrees/
 
 docs/.internal/
+
+scripts/video/
